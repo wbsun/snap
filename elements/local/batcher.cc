@@ -1,62 +1,64 @@
-/*
- * ForceIP.{cc,hh} -- element encapsulates packet in IP header
- * Robert Morris
- *
- * Copyright (c) 1999-2000 Massachusetts Institute of Technology
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, subject to the conditions
- * listed in the Click LICENSE file. These conditions include: you must
- * preserve this copyright notice, and you cannot mention the copyright
- * holders in advertising related to the Software without their permission.
- * The Software is provided WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED. This
- * notice is a summary of the Click LICENSE file; the license in that file is
- * legally binding.
- */
-
 #include <click/config.h>
-#include "forceip.hh"
+#include "batcher.hh"
 #include <click/error.hh>
 #include <click/glue.hh>
 #include <click/standard/alignmentinfo.hh>
 CLICK_DECLS
 
-ForceIP::ForceIP()
+Batcher::Batcher()
 {
-  _count = 0;
+	_count = 0;
 }
 
-ForceIP::~ForceIP()
+Batcher::~Batcher()
 {
 }
 
 Packet *
-ForceIP::simple_action(Packet *p_in)
+Batcher::simple_action(Packet *p_in)
 {
-  WritablePacket *p = p_in->uniqueify();
-  click_ip *ip = reinterpret_cast<click_ip *>(p->data());
-  unsigned plen = p->length();
+	WritablePacket *p = p_in->uniqueify();
+	click_ip *ip = reinterpret_cast<click_ip *>(p->data());
+	unsigned plen = p->length();
 
-  ip->ip_v = 4;
-  ip->ip_len = htons(plen);
+	ip->ip_v = 4;
+	ip->ip_len = htons(plen);
 
-  if((_count++ & 7) != 1){
-    ip->ip_off = 0;
-  }
+	if((_count++ & 7) != 1){
+		ip->ip_off = 0;
+	}
 
-  unsigned hlen = ip->ip_hl << 2;
-  if(hlen < sizeof(click_ip) || hlen > plen){
-    ip->ip_hl = plen >> 2;
-  }
+	unsigned hlen = ip->ip_hl << 2;
+	if(hlen < sizeof(click_ip) || hlen > plen){
+		ip->ip_hl = plen >> 2;
+	}
 
-  ip->ip_sum = 0;
-  ip->ip_sum = click_in_cksum((unsigned char *)ip, ip->ip_hl << 2);
+	ip->ip_sum = 0;
+	ip->ip_sum = click_in_cksum((unsigned char *)ip, ip->ip_hl << 2);
 
-  p->set_ip_header(ip, hlen);
+	p->set_ip_header(ip, hlen);
 
-  return p;
+	return p;
 }
 
+void*
+Batcher::cast(const char *n)
+{
+	if (strcmp(n, "VElement") == 0)
+		return (VElement*)this;
+	else if (strcmp(n, "Batcher") == 0)
+		return (Element*)this;
+	else
+		return 0;
+}
+
+void Batcher::vpush(int port, Vector<Packet*> *ps)
+{}
+
+Vector<Packet*> *Batcher::vpull(int port)
+{}
+
+
+
 CLICK_ENDDECLS
-EXPORT_ELEMENT(ForceIP)
+EXPORT_ELEMENT(Batcher)
