@@ -26,7 +26,8 @@ GPUEle::configure(Vector<String> &conf, ErrorHandler *errh)
 			 "TIMEOUT", 0, cpUnsigned, &_ustimeout,
 			 cpEnd) < 0) return -1;
 	if (_pktbufsz < 1540) // Need a real common MTU to figure out this
-		return errh->error("packet buffer size is %u, too small\n", _pktbufsz);
+		return errh->error("packet buffer size is %u, too small\n",
+				   _pktbufsz);
 
 	return 0;
 }
@@ -42,9 +43,11 @@ GPUEle::new_batch()
 			if (pb.second)
 				return pb;
 			
-			click_chatter("g4c malloc failed, sz %uB\n", _batchsz*_pktbufsz);
+			click_chatter("g4c malloc failed, sz %uB\n",
+				      _batchsz*_pktbufsz);
 		} else
-			click_chatter("can't reserve %d items space for packet batch\n", _batchsz);
+			click_chatter("can't reserve %d items space "
+				      "for packet batch\n", _batchsz);
 
 		delete pb.first;
 		pb.first = 0;
@@ -73,7 +76,8 @@ GPUEle::init_batch_pool()
 			if (pb.first)
 				_batchpool.push_back(pb);
 			else {
-				click_chatter("the %d batch failed to alloc\n", i);
+				click_chatter("the %d batch failed to "
+					      "alloc\n", i);
 			}
 		}
 	} else {
@@ -163,17 +167,24 @@ GPUEle::run_task(Task *task)
 
 		int i;
 		for (i=0; i<pb.first->size(); i++)
-			memcpy(pb.second + i*(_pktbufsz>>1), pb.first->at(i)->data(),
+			memcpy(pb.second + i*(_pktbufsz>>1),
+			       pb.first->at(i)->data(),
 			       pb.first->at(i)->length());
 		
-		int err = g4c_do_stuff_sync(pb.second, pb.second+_batchsz*(_pktbufsz>>1), _batchsz);
+		int err = g4c_do_stuff_sync(
+			pb.second,
+			pb.second+_batchsz*(_pktbufsz>>1),
+			_batchsz);
 		if (err) {
-			click_chatter("GPU execution error: %s\n", g4c_strerror(err));
+			click_chatter("GPU execution error: %s\n",
+				      g4c_strerror(err));
 		} else {
-			int *detectres = (int*)(pb.second+_batchsz*(_pktbufsz>>1));
+			int *detectres = (int*)(pb.second
+						+_batchsz*(_pktbufsz>>1));
 			for (i=0; i<_batchsz; i++) {
 				if (detectres[i]) 
-					click_chatter("suspicious packet found @ %d\n", i);
+					click_chatter("suspicious packet"
+						      " found @ %d\n", i);
 			}
 		}
 

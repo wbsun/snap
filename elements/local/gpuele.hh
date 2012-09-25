@@ -12,7 +12,8 @@
 CLICK_DECLS
 
 /**
- * This element doesn't consider thread-safe, though it uses multi-threading itself.
+ * This element doesn't consider thread-safe, though it uses
+ * multi-threading itself.
  */
 class GPUEle : public Element
 {
