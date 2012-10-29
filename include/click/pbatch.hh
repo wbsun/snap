@@ -124,6 +124,8 @@ public:
 	void calculate_parameters();
 	int init_for_host_batching();
 	void clean_for_host_batching();
+	void set_pointers();
+	bool full() { return size >= capacity;}
 };
 
 CLICK_ENDDECLS

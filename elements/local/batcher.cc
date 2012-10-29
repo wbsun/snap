@@ -29,16 +29,43 @@ Batcher::alloc_batch()
 		_batch->init_for_host_batching();
 		_batch->hostmem = g4c_alloc_page_lock_mem(_batch->memsize);
 		_batch->devmem = g4c_alloc_dev_mem(_batch->memsize);
-		// set pointers, work-something
-
+		_batch->set_pointers();
+		_batch->hwork_ptr = _batch->hostmem;
+		_batch->dwork_ptr = _batch->devmem;
+		_batch->work_size = _batch->memsize;
+		_batch->work_data = 0;	
 	}
 	
 	return _batch;
 }
 
+/**
+ * Pre-condition: _batch exists, _batch not full. Packet p checked.
+ */
+void
+Batcher::add_packet(Packet *p)
+{
+	int idx = _batch->size;
+
+	_batch->size++;
+	_batch->pptrs[idx] = p;
+	// TODO: copy slice data from p to _batch's slice.
+}
+
 void
 Batcher::push(int i, Packet *p)
 {
+	if (!_batch)
+		alloc_batch();
+
+	add_packet(p);
+	_count++;
+	
+	if (_batch->full()) {
+		PBatch *oldbatch = _batch;
+		alloc_batch();
+		output(0).bpush(oldbatch);
+	}
 }
 
 int

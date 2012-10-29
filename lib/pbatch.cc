@@ -37,13 +37,13 @@ PBatch::calculate_parameters()
 	} else {
 		slice_end = _slice_end;
 		slice_length = _slice_end - _slice_begin;
-		slice_size = g4c_round_up(slice_length, 32);
+		slice_size = g4c_round_up(slice_length, G4C_MEM_ALIGN);
 	}
 
 	if (_anno_flags == 0)
 		anno_size = 0;
 	else
-		anno_size = g4c_round_up(_anno_length, 32);
+		anno_size = g4c_round_up(_anno_length, G4C_MEM_ALIGN);
 
 	memsize = 0;
 	if (_slice_end == -1)
@@ -53,6 +53,40 @@ PBatch::calculate_parameters()
 
         if (_anno_flags != 0)
 		memsize += g4c_round_up(anno_size*capacity, G4C_PAGE_SIZE);
+}
+
+/**
+ * Set pointers to regions of memory chunk.
+ * Pre-condition: hostmem and devmem must be set before calling this.
+ */
+void
+PBatch::set_pointers()
+{
+	if (slice_end < 0) {
+		hpktlens = 0;
+		dpktlens = 0;
+
+		hslices = (unsigned char*)hostmem;
+		dslices = (unsigned char*)devmem;
+	} else {
+		hpktlens = (short*)hostmem;
+		dpktlens = (short*)devmem;
+
+		hslice = (unsigned char*)g4c_ptr_add(
+			hpktlens,
+			g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE));
+		dslice = (unsigned char*)g4c_ptr_add(
+			dpktlens,
+			g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE));
+	}
+
+	if (anno_flags == 0) {
+		hpktannos = 0;
+		dpktannos = 0;
+	} else {
+		hpktannos = hslices + g4c_round_up(slice_size*capacity, G4C_PAGE_SIZE);
+		dpktannos = dslices + g4c_round_up(slice_size*capacity, G4C_PAGE_SIZE);
+	}
 }
 
 int
