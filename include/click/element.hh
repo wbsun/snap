@@ -37,6 +37,10 @@ class Element { public:
     virtual Packet *pull(int port) CLICK_WARN_UNUSED_RESULT;
     virtual Packet *simple_action(Packet *p);
 
+    virtual void bpush(int port, PBatch *pb);
+    virtual PBatch *bpull(int port) CLICK_WARN_UNUSED_RESULT;
+    virtual PBatch *batched_simple_action(PBatch *pb);    
+
     virtual bool run_task(Task *task);	// return true iff did useful work
     virtual void run_timer(Timer *timer);
 #if CLICK_USERLEVEL
@@ -218,6 +222,8 @@ class Element { public:
 
 	inline void push(Packet* p) const;
 	inline Packet* pull() const;
+	inline void bpush(PBatch *pb) const;
+	inline PBatch* bpull() const;
 
 #if CLICK_STATS >= 1
 	unsigned npackets() const	{ return _packets; }
@@ -634,6 +640,38 @@ Element::Port::push(Packet* p) const
 #endif
 }
 
+/** @brief Push packet batch @pb over this port.
+ */
+inline void
+Element::Port::bpush(PBatch* pb) const
+{
+    assert(_e && pb);
+#if CLICK_STATS >= 1
+    _packets += pb->size();
+#endif
+#if CLICK_STATS >= 2
+    _e->input(_port)._packets += pb->size();
+    click_cycles_t start_cycles = click_get_cycles(),
+	start_child_cycles = _e->_child_cycles;
+# if HAVE_BOUND_PORT_TRANSFER
+#error "Batching on bound port not supported. @Element::Port::bpush()"   
+# else
+    _e->bpush(_port, pb);
+# endif
+    click_cycles_t all_delta = click_get_cycles() - start_cycles,
+	own_delta = all_delta - (_e->_child_cycles - start_child_cycles);
+    _e->_xfer_calls += 1;
+    _e->_xfer_own_cycles += own_delta;
+    _owner->_child_cycles += all_delta;
+#else
+# if HAVE_BOUND_PORT_TRANSFER
+#error "Batching on bound port not supported. @Element::Port::bpush()"   
+# else
+    _e->bpush(_port, pb);
+# endif
+#endif    
+}
+
 /** @brief Pull a packet over this port and return it.
  *
  * Pulls a packet from upstream in the router configuration by calling the
@@ -681,6 +719,41 @@ Element::Port::pull() const
 	++_packets;
 #endif
     return p;
+}
+
+/** @brief Pull a packet batch over this port and return it.
+ */
+inline PBatch*
+Element::Port::bpull() const
+{
+    assert(_e);
+#if CLICK_STATS >= 2
+    click_cycles_t start_cycles = click_get_cycles(),
+	old_child_cycles = _e->_child_cycles;
+# if HAVE_BOUND_PORT_TRANSFER
+#error "Batching on bound port not supported. @Element::Port::bpull()"   
+# else
+    PBatch *pb = _e->bpull(_port);
+# endif
+    if (pb)
+	_e->output(_port)._packets += pb->size();
+    click_cycles_t all_delta = click_get_cycles() - start_cycles,
+	own_delta = all_delta - (_e->_child_cycles - old_child_cycles);
+    _e->_xfer_calls += 1;
+    _e->_xfer_own_cycles += own_delta;
+    _owner->_child_cycles += all_delta;
+#else
+# if HAVE_BOUND_PORT_TRANSFER
+#error "Batching on bound port not supported. @Element::Port::bpull()"   
+# else
+    PBatch *pb = _e->bpull(_port);
+# endif
+#endif
+#if CLICK_STATS >= 1
+    if (pb)
+	_packets += pb->size();
+#endif
+    return pb;
 }
 
 /** @brief Push packet @a p to output @a port, or kill it if @a port is out of

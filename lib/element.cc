@@ -2971,6 +2971,32 @@ Element::simple_action(Packet *p)
     return p;
 }
 
+
+// Batched version of push/pull and simple_action:
+
+void
+Element::bpush(int port, PBatch *pb)
+{
+    pb = batched_simple_action(pb);
+    if (pb)
+	output(port).bpush(pb);
+}
+
+PBatch *
+Element::bpull(int port)
+{
+    PBatch *pb = input(port).bpull();
+    if (pb)
+	pb = batched_simple_action(pb);
+    return pb;
+}
+
+PBatch *
+Element::batched_simple_action(PBatch *pb)
+{
+    return pb;
+}
+
 /** @brief Run the element's task.
  *
  * @return true if the task accomplished some meaningful work, false otherwise
