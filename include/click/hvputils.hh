@@ -5,6 +5,6 @@
 	do {							  \
 		click_chatter("At %s::%d: ", __FILE__, __LINE__); \
 		click_chatter(__VA_ARGS__);			  \
-	}							  \
+	} while(0);						  \
 
 #endif

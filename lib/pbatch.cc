@@ -8,17 +8,18 @@ PBatch::PBatch(): capacity(CLICK_PBATCH_CAPACITY), size(0), pptrs(0), memsize(0)
 		  dpktlens(0), dslices(0), dpktannos(0), slice_begin(0),
 		  slice_end(0), slice_length(0), slice_size(0),
 		  anno_flags(0), anno_size(0), dev_stream(0),
-		  hwork_ptr(0), dwork_ptr(0), work_size(0), work_data(0)
+		  hwork_ptr(0), dwork_ptr(0), work_size(0), work_data(0),
+		  force_pktlens(false)
 {
 }
 
-PBatch::PBatch(int _capacity, int _slice_begin, int _slice_end,
+PBatch::PBatch(int _capacity, int _slice_begin, int _slice_end, bool _force_pktlens,
 	       int _anno_flags, int _anno_length):
 	capacity(_capacity), size(0), pptrs(0),
 	hostmem(0), devmem(0), hpktlens(0), hslices(0), hpktannos(0),
 	dpktlens(0), dslices(0), dpktannos(0),
 	anno_flags(_anno_flags), dev_stream(0),
-	hwork_ptr(0), dwork_ptr(0), work_size(0), work_data(0)
+	hwork_ptr(0), dwork_ptr(0), work_size(0), work_data(0), force_pktlens(_force_pktlens)
 {
 	calculate_parameters();
 }
@@ -30,7 +31,7 @@ void
 PBatch::calculate_parameters()
 {
 	slice_begin = _slice_begin;
-	if (_slice_end < 0) {
+	if (_slice_end <= 0) {
 		slice_end = -1;
 		slice_length = CLICK_PBATH_PACKET_BUFFER_SIZE;
 		slice_size = slice_length;
@@ -46,7 +47,7 @@ PBatch::calculate_parameters()
 		anno_size = g4c_round_up(_anno_length, G4C_MEM_ALIGN);
 
 	memsize = 0;
-	if (_slice_end == -1)
+	if (_slice_end < 0||force_pktlens)
 		memsize += g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE);
 
 	memsize += g4c_round_up(slice_size*capacity, G4C_PAGE_SIZE);
@@ -62,7 +63,7 @@ PBatch::calculate_parameters()
 void
 PBatch::set_pointers()
 {
-	if (slice_end < 0) {
+	if (slice_end > 0 && !force_pktlens) {
 		hpktlens = 0;
 		dpktlens = 0;
 

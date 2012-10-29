@@ -7,6 +7,16 @@
 #include <g4c.h>
 CLICK_DECLS
 
+/**
+ * Batcher configurations:
+ *   TIMEOUT: int value in mili-sec.
+ *   SLICE_BEGIN: int value
+ *   SLICE_END: int value
+ *   CAPACITY: int value for batch capacity
+ *   ANN_FLAGS: unsigned char.
+ *   FORCE_PKTLENS: int value.
+ *   
+ */
 class Batcher : public Element {
 public:
 	Batcher();
@@ -23,7 +33,7 @@ public:
 	void run_timer(Timer *timer);
 
 	void set_slice_range(int begin, int end);
-	void set_anno_flags(unsigned int flags);
+	void set_anno_flags(unsigned char flags);
 
 private:
 	int _batch_capacity;
@@ -31,11 +41,17 @@ private:
 	// should have a mutex or spin_lock to protect batch pointer.
 	PBatch *_batch;
 	int _slice_begin, _slice_end;
-	unsigned int _anno_flags;
+	unsigned char _anno_flags;
+	bool _force_pktlens;
+
+	int _timeout_ms;
+	Timer _timer;	
 
 	int _count;
+	int _drops;
 
 	PBatch *alloc_batch();
+	void add_packet(Packet *p);
 
 };
 

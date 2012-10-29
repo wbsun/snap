@@ -3,7 +3,7 @@
 #include <click/packet.hh>
 
 #define CLICK_PBATCH_PACKET_BUFFER_SIZE 2048
-#define CLICK_PBATH_CAPACITY 1024
+#define CLICK_PBATCH_CAPACITY 1024
 
 CLICK_DECLS
 
@@ -85,16 +85,17 @@ public:
 	 *   anno_flags:   flags to indicate whether annotation needed, to produce
 	 *                 or to use or both.
 	 *   anno_size:    the memory allcoated to hold a packet annotation, for
-	 *                 roundup.
+	 *                 roundup. Must be greater than or equal to Packet::anno_size.
 	 *
 	 */
 	int slice_begin;
 	int slice_end;
 	int slice_length; // finally allocated slice length
 	int slice_size; // memory size allocated to hold a slice.
+	bool force_pktlens;
 	unsigned char anno_flags;
-#define PBATH_ANNO_READ ((unsigned char)0x01)
-#define PBATH_ANNO_WRITE ((unsigned char)0x02)
+#define PBATCH_ANNO_READ ((unsigned char)0x01)
+#define PBATCH_ANNO_WRITE ((unsigned char)0x02)
 	int anno_size; 
 
 	/*
@@ -113,12 +114,13 @@ public:
 	struct PBatchWorkDataHeader {
 		unsigned int data_size;
 		unsigned int data_type;
+		unsigned char private_data[0];
 	};
 
 public:
 	// Functions:
 	PBatch();
-	PBatch(int _capacity, int _slice_begin, int _slice_end,
+	PBatch(int _capacity, int _slice_begin, int _slice_end, bool _force_pktlens,
 	       int _anno_flags, int _anno_length);
 	~PBatch();
 	void calculate_parameters();
@@ -126,6 +128,12 @@ public:
 	void clean_for_host_batching();
 	void set_pointers();
 	bool full() { return size >= capacity;}
+
+	unsigned char *hslice(int idx) { return hslices + idx*slice_size;}
+//	unsigned char *dslice(int idx) { return dslices + idx*slice_size;}
+	unsigned char *hanno(int idx) { return hpktannos?(hpktannos + idx*anno_size):0;}
+//	unsigned char *danno(int idx) { return dpktannos?(dpktannos + idx*anno_size):0;}
+	short *hpktlen(int idx) { return hpktlens?(hpktlens + idx):0;}
 };
 
 CLICK_ENDDECLS
