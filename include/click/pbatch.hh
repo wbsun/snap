@@ -12,7 +12,8 @@ public:
 	int capacity;
 	int size;
 	Packet **pptrs;
-	
+
+	unsigned long memsize;	
 	void *hostmem;
 	void *devmem;
 
@@ -73,8 +74,9 @@ public:
 	 * But set_slice_range() will find their union without gap.
 	 *
 	 * Vars:
+	 *   Slice range is [slice_begin, slice_end). Close beginning and open ending.
 	 *   slice_begin:  begin position in packet data to form slice.
-	 *   slice_end:    end position in packet data to form slice, a negative
+	 *   slice_end:    end position(excluded) in packet data to form slice, a negative
 	 *                 slice_end means copy the entire packet data.
 	 *   slice_length: the finally allocated slice length, usually
 	 *                 it is slice_end - slice_begin.
@@ -106,11 +108,20 @@ public:
 	void *hwork_ptr;
 	void *dwork_ptr;
 	int work_size;
+	void *work_data;
+
+	struct PBatchWorkDataHeader {
+		unsigned int data_size;
+		unsigned int data_type;
+	};
 
 public:
 	// Functions:
 	PBatch();
+	PBatch(int _capacity, int _slice_begin, int _slice_end,
+	       int _anno_flags, int _anno_length);
 	~PBatch();
+	void calculate_parameters();
 	int init_for_host_batching();
 	void clean_for_host_batching();
 };

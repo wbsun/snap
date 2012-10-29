@@ -8,56 +8,74 @@ CLICK_DECLS
 Batcher::Batcher()
 {
 	_count = 0;
+	_batch_capacity = CLICK_PBATH_CAPACITY;
+	_cur_batch_size = 0;
+	_batch = 0;
+	_slice_begin = 0;
+	_slice_end = 0;
+	_anno_flags = 0;
 }
 
 Batcher::~Batcher()
 {
 }
 
-Packet *
-Batcher::simple_action(Packet *p_in)
+PBatch*
+Batcher::alloc_batch()
 {
-	WritablePacket *p = p_in->uniqueify();
-	click_ip *ip = reinterpret_cast<click_ip *>(p->data());
-	unsigned plen = p->length();
+	_batch = new PBatch(_batch_capacity, _slice_begin, _slice_end,
+			    _anno_flags, Packet::anno_size);
+	if (_batch) {
+		_batch->init_for_host_batching();
+		_batch->hostmem = g4c_alloc_page_lock_mem(_batch->memsize);
+		_batch->devmem = g4c_alloc_dev_mem(_batch->memsize);
+		// set pointers, work-something
 
-	ip->ip_v = 4;
-	ip->ip_len = htons(plen);
-
-	if((_count++ & 7) != 1){
-		ip->ip_off = 0;
 	}
-
-	unsigned hlen = ip->ip_hl << 2;
-	if(hlen < sizeof(click_ip) || hlen > plen){
-		ip->ip_hl = plen >> 2;
-	}
-
-	ip->ip_sum = 0;
-	ip->ip_sum = click_in_cksum((unsigned char *)ip, ip->ip_hl << 2);
-
-	p->set_ip_header(ip, hlen);
-
-	return p;
+	
+	return _batch;
 }
 
-void*
-Batcher::cast(const char *n)
+void
+Batcher::push(int i, Packet *p)
 {
-	if (strcmp(n, "VElement") == 0)
-		return (VElement*)this;
-	else if (strcmp(n, "Batcher") == 0)
-		return (Element*)this;
-	else
-		return 0;
 }
 
-void Batcher::vpush(int port, Vector<Packet*> *ps)
-{}
+int
+Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
+{
+}
 
-Vector<Packet*> *Batcher::vpull(int port)
-{}
+int
+Batcher::initialize(ErrorHandler *errh)
+{
+}
 
+void
+Batcher::run_timer(Timer *timer)
+{
+}
+
+void
+Batcher::set_slice_range(int begin, int end)
+{
+	if (begin < _slice_begin)
+		_slice_begin = begin;
+
+	if (end < 0) {
+		_slice_end = -1;
+		return;
+	}
+
+	if (end > _slice_end)
+		_slice_end = end;
+}
+
+void
+Batcher::set_anno_flags(unsigned int flags)
+{
+	_anno_flags |= flags;
+}
 
 
 CLICK_ENDDECLS

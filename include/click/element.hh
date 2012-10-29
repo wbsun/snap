@@ -6,6 +6,7 @@
 #include <click/string.hh>
 #include <click/packet.hh>
 #include <click/handler.hh>
+#include <click/pbatch.hh>
 CLICK_DECLS
 class Router;
 class Master;
