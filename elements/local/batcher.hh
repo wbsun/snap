@@ -14,7 +14,7 @@ CLICK_DECLS
  *   SLICE_END: int value
  *   CAPACITY: int value for batch capacity
  *   ANN_FLAGS: unsigned char.
- *   FORCE_PKTLENS: int value.
+ *   FORCE_PKTLENS: bool value.
  *   
  */
 class Batcher : public Element {
@@ -45,7 +45,8 @@ private:
 	bool _force_pktlens;
 
 	int _timeout_ms;
-	Timer _timer;	
+	Timer _timer;
+	PBatch *_timed_batch;
 
 	int _count;
 	int _drops;

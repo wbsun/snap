@@ -17,6 +17,7 @@ Batcher::Batcher(): _timer(this)
 	_anno_flags = 0;
 	_timeout_ms = CLICK_BATCH_TIMEOUT;
 	_force_pktlens = false;
+	_timed_batch = 0;
 }
 
 Batcher::~Batcher()
@@ -38,6 +39,8 @@ Batcher::alloc_batch()
 		_batch->work_size = _batch->memsize;
 		_batch->work_data = 0;	
 	}
+
+	_cur_batch_size = 0;
 	
 	return _batch;
 }
@@ -53,6 +56,7 @@ Batcher::add_packet(Packet *p)
 	if (p->has_mac_header()) {
 		_batch->size++;
 		_batch->pptrs[idx] = p;
+		_cur_batch_size = _batch->size;
 
 		unsigned long copysz = p->end_data() - p->mac_header();
 		if (_batch->slice_end > 0 && copysz > _batch->slice_length)
@@ -70,6 +74,11 @@ Batcher::add_packet(Packet *p)
 			       p->anno(),
 			       Packet::anno_size);
 		}
+
+		if (idx == 0 && _timeout_ms > 0) {			
+			_timer.schedule_after_msec(_timeout_ms);
+			_timed_batch = _batch;
+		}
 	} else {
 		hvp_chatter("add_packet(): packet has no MAC header\n");
 		_drops++;
@@ -79,13 +88,16 @@ Batcher::add_packet(Packet *p)
 void
 Batcher::push(int i, Packet *p)
 {
-	if (!_batch)
-		alloc_batch();
+	if (!_batch) {
+		alloc_batch();		
+	}
 
 	add_packet(p);
 	_count++;
 	
 	if (_batch->full()) {
+		if (_timer.scheduled())
+			_timer.clear();
 		PBatch *oldbatch = _batch;
 		alloc_batch();
 		output(0).bpush(oldbatch);
@@ -95,20 +107,30 @@ Batcher::push(int i, Packet *p)
 int
 Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+	if (cp_va_kparse(conf, this, errh,
+			 "TIMEOUT", cpkN, cpInteger, &_timeout_ms,
+			 "SLICE_BEGIN", cpkN, cpInteger, &_slice_begin,
+			 "SLICE_END", cpkN, cpInteger, &_slice_end,
+			 "CAPACITY", cpkN, cpIntegaer, &_batch_capacity,
+			 "ANN_FLAGS", cpkN, cpByte, &_anno_flags,
+			 "FORCE_PKTLENS", cpkN, cpBool, &_force_pktlens,
+			 cpEnd) < 0)
+		return -1;
+	return 0;
 }
 
 int
 Batcher::initialize(ErrorHandler *errh)
 {
 	_timer.initialize(this);
-	_timer.schedule_after_msec(_timeout_ms);
 }
 
 void
 Batcher::run_timer(Timer *timer)
 {
-	// Process timeout-ed batch.
-	_timer.schedule_after_msec(_timeout_ms);
+	if (_timed_batch != _batch || !_timed_batch)
+		return;
+	// NOT READY FOR TIMEPUT OPS YET.
 }
 
 void
