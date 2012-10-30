@@ -3,6 +3,7 @@
 #include <click/error.hh>
 #include <click/glue.hh>
 #include <click/standard/alignmentinfo.hh>
+#include <click/hvputils.hh>
 CLICK_DECLS
 
 Batcher::Batcher(): _timer(this)
@@ -123,6 +124,7 @@ int
 Batcher::initialize(ErrorHandler *errh)
 {
 	_timer.initialize(this);
+	return 0;
 }
 
 void
@@ -157,3 +159,5 @@ Batcher::set_anno_flags(unsigned char flags)
 
 CLICK_ENDDECLS
 EXPORT_ELEMENT(Batcher)
+ELEMENT_LIBS(-lg4c)
+
