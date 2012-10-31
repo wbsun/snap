@@ -28,6 +28,12 @@ public:
 	 *  ~  For roundup to PAGE_SIZE        ~
 	 *  |----------------------------------|
 	 *  |                                  |
+	 *  |  N * unsigned long: packet flags |
+	 *  |                                  | 
+	 *  |----------------------------------|
+	 *  ~  For roundup to PAGE_SIZE        ~
+	 *  |----------------------------------|
+	 *  |                                  |
 	 *  |  N * slice_size: packet data     |
 	 *  |                                  |
 	 *  |----------------------------------|
