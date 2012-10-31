@@ -32,8 +32,20 @@ public:
 
 	void run_timer(Timer *timer);
 
+	// Batcher/PBatch users are supposed to call the followings at their
+	// configuration time.
 	void set_slice_range(int begin, int end);
 	void set_anno_flags(unsigned char flags);
+	inline unsigned long set_batch_user_info(unsigned long priv_len)
+		{
+			unsigned long cur = _user_priv_len;
+			
+			_nr_users++;
+			_user_priv_len += g4c_round_up(priv_len, 8); // for 64bit/8byte alignment.
+			return cur;
+		}
+
+	static bool kill_batch(PBatch *pb);
 
 private:
 	int _batch_capacity;
@@ -43,6 +55,9 @@ private:
 	int _slice_begin, _slice_end;
 	unsigned char _anno_flags;
 	bool _force_pktlens;
+
+	int _nr_users;
+	unsigned long _user_priv_len;
 
 	int _timeout_ms;
 	Timer _timer;

@@ -53,11 +53,13 @@ public:
 	 * When negative, the packet is disabled.
 	 */
 	short *hpktlens;
+	unsigned long *hpktflags; /* 0 means normal, availabe.  */
 	unsigned char *hslices;
 	unsigned char *hpktannos;
 
 	// Device pointers
 	short *dpktlens;
+	unsigned long *dpktflags;
 	unsigned char *dslices;
 	unsigned char *dpktannos;
 
@@ -109,13 +111,12 @@ public:
 	void *hwork_ptr;
 	void *dwork_ptr;
 	int work_size;
-	void *work_data;
 
-	struct PBatchWorkDataHeader {
-		unsigned int data_size;
-		unsigned int data_type;
-		unsigned char private_data[0];
-	};
+	// for sharing:
+	int shared;
+	int nr_users;
+	unsigned long user_priv_len;
+	void *user_priv;	
 
 public:
 	// Functions:
@@ -127,13 +128,14 @@ public:
 	int init_for_host_batching();
 	void clean_for_host_batching();
 	void set_pointers();
-	bool full() { return size >= capacity;}
+	inline bool full() { return size >= capacity;}
 
-	unsigned char *hslice(int idx) { return hslices + idx*slice_size;}
-//	unsigned char *dslice(int idx) { return dslices + idx*slice_size;}
-	unsigned char *hanno(int idx) { return hpktannos?(hpktannos + idx*anno_size):0;}
-//	unsigned char *danno(int idx) { return dpktannos?(dpktannos + idx*anno_size):0;}
-	short *hpktlen(int idx) { return hpktlens?(hpktlens + idx):0;}
+	inline unsigned long *hpktflag(int idx) { return hpktflags + idx; }
+	inline unsigned char *hslice(int idx) { return hslices + idx*slice_size;}
+	inline unsigned char *hanno(int idx) { return hpktannos?(hpktannos + idx*anno_size):0;}
+	inline short *hpktlen(int idx) { return hpktlens?(hpktlens + idx):0;}
+
+	inline void *user_priv(unsigned long offset) { return (void*)(g4c_ptr_add(user_priv, offset)); }
 };
 
 CLICK_ENDDECLS

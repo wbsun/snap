@@ -8,8 +8,9 @@ PBatch::PBatch(): capacity(CLICK_PBATCH_CAPACITY), size(0), pptrs(0), memsize(0)
 		  dpktlens(0), dslices(0), dpktannos(0), slice_begin(0),
 		  slice_end(0), slice_length(0), slice_size(0),
 		  anno_flags(0), anno_size(0), dev_stream(0),
-		  hwork_ptr(0), dwork_ptr(0), work_size(0), work_data(0),
-		  force_pktlens(false)
+		  hwork_ptr(0), dwork_ptr(0), work_size(0),
+		  force_pktlens(false), shared(0), nr_users(0), user_priv_len(0),
+		  user_priv(0), hpktflags(0), dpktflags(0)
 {
 }
 
@@ -19,7 +20,9 @@ PBatch::PBatch(int _capacity, int _slice_begin, int _slice_end, bool _force_pktl
 	hostmem(0), devmem(0), hpktlens(0), hslices(0), hpktannos(0),
 	dpktlens(0), dslices(0), dpktannos(0),
 	anno_flags(_anno_flags), dev_stream(0),
-	hwork_ptr(0), dwork_ptr(0), work_size(0), work_data(0), force_pktlens(_force_pktlens)
+	hwork_ptr(0), dwork_ptr(0), work_size(0), force_pktlens(_force_pktlens),
+	shared(0), nr_users(0), user_priv_len(0), user_priv(0),
+	hpktflags(0), dpktflags(0)
 {
 	calculate_parameters();
 }
@@ -50,6 +53,7 @@ PBatch::calculate_parameters()
 	if (_slice_end < 0||force_pktlens)
 		memsize += g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE);
 
+	memsize += g4c_round_up(sizeof(unsigned long)*capacity, G4C_PAGE_SIZE);
 	memsize += g4c_round_up(slice_size*capacity, G4C_PAGE_SIZE);
 
         if (_anno_flags != 0)
@@ -67,19 +71,24 @@ PBatch::set_pointers()
 		hpktlens = 0;
 		dpktlens = 0;
 
-		hslices = (unsigned char*)hostmem;
-		dslices = (unsigned char*)devmem;
+		hpktflags = (unsigned long*)hostmem;
+		dpktflags = (unsigned long*)devmem;
 	} else {
 		hpktlens = (short*)hostmem;
 		dpktlens = (short*)devmem;
 
-		hslice = (unsigned char*)g4c_ptr_add(
+		hpktflags = (unsigned long*)g4c_ptr_add(
 			hpktlens,
 			g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE));
-		dslice = (unsigned char*)g4c_ptr_add(
+		dpktflags = (unsigned long*)g4c_ptr_add(
 			dpktlens,
 			g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE));
 	}
+
+	hslices = (unsigned char*)g4c_ptr_add(hpktflags,
+					      g4c_round_up(sizeof(unsigned long)*capacity, G4C_PAGE_SIZE));
+	dslices = (unsigned char*)g4c_ptr_add(dpktflags,
+					      g4c_round_up(sizeof(unsigned long)*capacity, G4C_PAGE_SIZE));					      
 
 	if (anno_flags == 0) {
 		hpktannos = 0;

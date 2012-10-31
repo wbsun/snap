@@ -19,6 +19,8 @@ Batcher::Batcher(): _timer(this)
 	_timeout_ms = CLICK_BATCH_TIMEOUT;
 	_force_pktlens = false;
 	_timed_batch = 0;
+	_nr_users = 0;
+	_user_priv_len = 0;
 }
 
 Batcher::~Batcher()
@@ -35,15 +37,44 @@ Batcher::alloc_batch()
 		_batch->hostmem = g4c_alloc_page_lock_mem(_batch->memsize);
 		_batch->devmem = g4c_alloc_dev_mem(_batch->memsize);
 		_batch->set_pointers();
-		_batch->hwork_ptr = _batch->hostmem;
+
+		// TODO:
+		//   A fater option is to not copy flags, lunching a kernel
+		//   to init device size pktflags or using cudaMemset.
+		_batch->hwork_ptr = _batch->hostmem; 
 		_batch->dwork_ptr = _batch->devmem;
 		_batch->work_size = _batch->memsize;
-		_batch->work_data = 0;	
+
+		_batch->nr_users = _nr_users;
+		_batch->user_priv_len = _user_priv_len;
+		_batch->user_priv = malloc(_user_priv_len);
+		if (!_batch->user_priv) {
+			hvp_chatter("Out of memory.\n");
+			kill_batch(_batch);
+			_batch = 0;
+		}
 	}
 
 	_cur_batch_size = 0;
 	
 	return _batch;
+}
+
+bool
+Batcher::kill_batch(PBatch *pb)
+{
+	pb->shared--;
+	if (pb->shared < 0) {
+		g4c_free_page_lock_mem(pb->hostmem, pb->memsize);
+		g4c_free_dev_mem(pb->devmem, pb->memsize);
+
+		g4c_free_stream(pb->dev_stream);
+		free(pb->user_priv);
+		delete pb;
+		return true;
+	}
+
+	return false;
 }
 
 /**
@@ -66,6 +97,8 @@ Batcher::add_packet(Packet *p)
 		if (_batch->hpktlens) {
 			*_batch->hpktlen(idx) = copysz;
 		}
+
+		_batch->hpktflags = 0;
 		memcpy(_batch->hslice(idx),
 		       p->mac_header()+_batch->slice_begin,
 		       copysz);

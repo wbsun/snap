@@ -1,5 +1,5 @@
-#ifndef CLICK_H2D_HH
-#define CLICK_H2D_HH
+#ifndef CLICK_D2H_HH
+#define CLICK_D2H_HH
 #include <click/element.hh>
 #include <click/glue.hh>
 #include <click/pbatch.hh>
@@ -7,19 +7,17 @@
 
 CLICK_DECLS
 
-class H2D : public Element {
+class D2H : public Element {
 public:
-	H2D();
-	~H2D();
+	D2H();
+	~D2H();
 
-	const char *class_name() const { return "H2D"; }
+	const char *class_name() const { return "D2H"; }
 	const char *port_count() const { return PORTS_1_1; }
 	const char *processing() const { return PUSH; }
 
 	void push(int i, Packet *p); // Should never be called.
 	void bpush(int i, PBatch *pb);
-
-	void drop_batch(PBatch *pb);
 
 	int configure(Vector<String> &conf, ErrorHandler *errh);
 	int initialize(ErrorHandler *errh);
