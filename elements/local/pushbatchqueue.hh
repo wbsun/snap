@@ -8,6 +8,9 @@
 #include <g4c.h>
 CLICK_DECLS
 
+/**
+ * Sync device stream.
+ */
 class PushBatchQueue : public Element {
 public:
 	PushBatchQueue();
@@ -20,12 +23,20 @@ public:
 	void push(int i, Packet *p); // Should never be called.
 	void bpush(int i, PBatch *pb);
 
+	bool run_task(Task *task);
+
 	int configure(Vector<String> &conf, ErrorHandler *errh);
 	int initialize(ErrorHandler *errh);
+
+	static const int DEFAULT_LEN;
 private:
 	int _que_len;
-	Ring<PBatch*> _que;
+	LFRing<PBatch*> _que;
 	Task _task;
+	bool _block;
+	bool _process_all;
+	bool _fast_sched;
+	int _drops;
 }
 
 CLICK_ENDDECLS

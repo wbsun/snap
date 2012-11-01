@@ -10,6 +10,7 @@ const int BUnqueue::DEFAULT_LEN = (int)(1<<16);
 BUnqueue::BUnqueue()
 {
 	_que_len = DEFAULT_LEN;
+	_drops = 0;
 }
 
 BUnqueue::~BUnqueue()
@@ -49,7 +50,10 @@ BUnqueue::pull(int port)
 void
 BUnqueue::bpush(int i, PBatch *pb)
 {
-	_que.push_back(pb);
+	if (!_que.add_new(pb)) {
+		_drops = pb->size();
+		Batcher::kill_batch(pb);
+	}
 }
 
 PBatch *
@@ -58,9 +62,9 @@ BUnqueue::bpull(int port)
 	if (_que.empty())
 		return 0;
 	else {
-		PBatch *pb = _que.front();
+		PBatch *pb = _que.oldest();
 		if (g4c_stream_done(pb->dev_stream)) {
-			_que.pop_front();
+			_que.remove_oldest();
 			return pb;
 		} else
 			return 0;

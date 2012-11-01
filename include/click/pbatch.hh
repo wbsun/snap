@@ -10,7 +10,7 @@ CLICK_DECLS
 class PBatch {
 public:
 	int capacity;
-	int size;
+	int npkts;
 	Packet **pptrs;
 
 	unsigned long memsize;	
@@ -134,7 +134,8 @@ public:
 	int init_for_host_batching();
 	void clean_for_host_batching();
 	void set_pointers();
-	inline bool full() { return size >= capacity;}
+	inline bool full() { return npkts >= capacity;}
+	inline int size() { return npkts; }
 
 	inline unsigned long *hpktflag(int idx) { return hpktflags + idx; }
 	inline unsigned char *hslice(int idx) { return hslices + idx*slice_size;}

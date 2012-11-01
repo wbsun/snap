@@ -118,9 +118,9 @@ LFRing::reserve(int sz)
 	assert(!_ring);
 	assert(sz > 0);
 
-	_ring = (T*)CLICK_LALLOC(sizeof(T)*(sz+1));
+	g4c_to_volatile(_ring) = (T*)CLICK_LALLOC(sizeof(T)*(sz+1));
 	if (_ring) {
-		_capacity = sz;
+		g4c_to_volatile(_capacity) = sz;
 		return true;
 	} else
 		return false;		
@@ -133,7 +133,8 @@ LFRing::add_new(T& v)
 	if ((_head+1)%(_capacity+1) == _tail)
 		return false;
 	_ring[_head] = v;
-	_head = (_head+1)%(_capacity+1);
+	g4c_to_volatile(_head) = (_head+1)%(_capacity+1);
+	g4c_var_barrier(_head);
 	return true;	
 }
 
@@ -141,7 +142,8 @@ template <typename T> void
 LFRing::remove_oldest()
 {
 	assert(_ring && _head!=_tail);
-	_tail = (_tail+1)%(_capacity+1);
+	g4c_to_volatile(_tail) = (_tail+1)%(_capacity+1);
+	g4c_var_barrier(_tail);
 }
 
 CLICK_ENDDECLS

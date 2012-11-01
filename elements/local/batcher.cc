@@ -83,12 +83,12 @@ Batcher::kill_batch(PBatch *pb)
 void
 Batcher::add_packet(Packet *p)
 {
-	int idx = _batch->size;
+	int idx = _batch->size();
 
 	if (p->has_mac_header()) {
-		_batch->size++;
+		_batch->npkts++;
 		_batch->pptrs[idx] = p;
-		_cur_batch_size = _batch->size;
+		_cur_batch_size = _batch->size();
 
 		unsigned long copysz = p->end_data() - p->mac_header();
 		if (_batch->slice_end > 0 && copysz > _batch->slice_length)

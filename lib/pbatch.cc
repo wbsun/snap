@@ -3,7 +3,7 @@
 
 CLICK_DECLS
 
-PBatch::PBatch(): capacity(CLICK_PBATCH_CAPACITY), size(0), pptrs(0), memsize(0),
+PBatch::PBatch(): capacity(CLICK_PBATCH_CAPACITY), npkts(0), pptrs(0), memsize(0),
 		  hostmem(0), devmem(0), hpktlens(0), hslices(0), hpktannos(0),
 		  dpktlens(0), dslices(0), dpktannos(0), slice_begin(0),
 		  slice_end(0), slice_length(0), slice_size(0),
@@ -16,7 +16,7 @@ PBatch::PBatch(): capacity(CLICK_PBATCH_CAPACITY), size(0), pptrs(0), memsize(0)
 
 PBatch::PBatch(int _capacity, int _slice_begin, int _slice_end, bool _force_pktlens,
 	       int _anno_flags, int _anno_length):
-	capacity(_capacity), size(0), pptrs(0),
+	capacity(_capacity), npkts(0), pptrs(0),
 	hostmem(0), devmem(0), hpktlens(0), hslices(0), hpktannos(0),
 	dpktlens(0), dslices(0), dpktannos(0),
 	anno_flags(_anno_flags), dev_stream(0),

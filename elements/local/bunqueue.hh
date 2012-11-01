@@ -29,7 +29,8 @@ public:
 
 private:
 	int _que_len;
-	Ring<PBatch*> _que;
+	LFRing<PBatch*> _que;
+	int _drops;
 }
 
 CLICK_ENDDECLS
