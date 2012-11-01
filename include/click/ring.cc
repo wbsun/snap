@@ -7,12 +7,12 @@
 CLICK_DECLS
 
 template <typename T>
-Ring<T>::Ring():_ring(0), _head(0), _tail(0), _capacity(0), _next(0)
+VarRing<T>::VarRing():_ring(0), _head(0), _tail(0), _capacity(0), _next(0)
 {
 }
 
 template <typename T>
-Ring<T>::Ring(int cap):_capacity(cap),
+VarRing<T>::VarRing(int cap):_capacity(cap),
 		       _ring(0),
 		       _head(0), _tail(0), _next(0)
 {
@@ -22,20 +22,20 @@ Ring<T>::Ring(int cap):_capacity(cap),
 }
 
 template <typename T>
-Ring<T>::Ring(const Ring<T> &v)
+VarRing<T>::VarRing(const VarRing<T> &v)
 {
 	copy(v);	
 }
 
 template <typename T>
-Ring<T>::~Ring()
+VarRing<T>::~VarRing()
 {
 	if (_ring && _capacity)
 		CLICK_LFREE(_ring, _capacity*sizeof(T));
 }
 
 template <typename T>
-void Ring<T>::copy(const Ring<T> &v)
+void VarRing<T>::copy(const VarRing<T> &v)
 {
 	_capacity = v._capacity;
 	_head = v._head;
@@ -49,7 +49,7 @@ void Ring<T>::copy(const Ring<T> &v)
 }
 
 template <typename T>
-Ring<T> &Ring<T>::operator=(const Ring<T> &v)
+VarRing<T> &VarRing<T>::operator=(const VarRing<T> &v)
 {
 	clear();
 	copy(v);
@@ -57,7 +57,7 @@ Ring<T> &Ring<T>::operator=(const Ring<T> &v)
 }
 
 template <typename T>
-inline int Ring<T>::size() const
+inline int VarRing<T>::size() const
 {
 	if (_tail < _head)
 		return _next+_capacity-_head;
@@ -66,19 +66,19 @@ inline int Ring<T>::size() const
 }
 
 template <typename T>
-inline bool Ring<T>::empty() const
+inline bool VarRing<T>::empty() const
 {
 	return _tail == _next || !_ring;
 }
 
 template <typename T>
-inline int Ring<T>::capacity() const
+inline int VarRing<T>::capacity() const
 {
 	return _capacity;
 }
 
 template <typename T>
-bool Ring<T>::reserve(int n);
+bool VarRing<T>::reserve(int n);
 {
 	if (n <= size() || n == _capacity)
 		return True;
@@ -122,19 +122,19 @@ bool Ring<T>::reserve(int n);
 }
 
 template <typename T>
-inline void Ring<T>::clear()
+inline void VarRing<T>::clear()
 {
 	_head = _tail = _next = 0;
 }
 
 template <typename T>
-void Ring<T>::check_and_makespace(int rsz)
+void VarRing<T>::check_and_makespace(int rsz)
 {
 	if (!_ring || (_next == _head && _head != _tail)) {
 		int sz;
 		if (!_capacity)
 			sz = rsz;
-		else if (ring)
+		else if (_ring)
 			sz = _capacity<<1;
 		else
 			sz = _capacity;
@@ -144,7 +144,7 @@ void Ring<T>::check_and_makespace(int rsz)
 }
 
 template <typename T>
-void Ring<T>::push_front(T& v)
+void VarRing<T>::push_front(T& v)
 {
 	check_and_makespace(10);
 	if (empty()) 		
@@ -156,7 +156,7 @@ void Ring<T>::push_front(T& v)
 }
 
 template <typename T>
-void Ring<T>::pop_front()
+void VarRing<T>::pop_front()
 {
 	assert(!empty());
 	assert(_ring);
@@ -169,7 +169,7 @@ void Ring<T>::pop_front()
 }
 
 template <typename T>
-void Ring<T>::push_back(T& v)
+void VarRing<T>::push_back(T& v)
 {
 	check_and_makespace(10);
 
@@ -181,7 +181,7 @@ void Ring<T>::push_back(T& v)
 }
 
 template <typename T>
-void Ring<T>::pop_back()
+void VarRing<T>::pop_back()
 {
 	assert(!empty());
 	assert(_ring);
