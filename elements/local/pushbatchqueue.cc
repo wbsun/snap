@@ -64,7 +64,7 @@ PushBatchQueue::run_task(Task *task)
 		if (_block)
 			g4c_stream_sync(pb->dev_stream);
 		else
-			done = g4c_stream_done(pb->dev_stream);
+			done = g4c_stream_done(pb->dev_stream)?true:false;
 
 		if (_block || done) {
 			_que.remove_oldest();
