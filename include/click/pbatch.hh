@@ -1,6 +1,7 @@
 #ifndef CLICK_PBATCH_HH
 #define CLICK_PBATCH_HH
 #include <click/packet.hh>
+#include <g4c.h>
 
 #define CLICK_PBATCH_PACKET_BUFFER_SIZE 2048
 #define CLICK_PBATCH_CAPACITY 1024
@@ -142,7 +143,7 @@ public:
 	inline unsigned char *hanno(int idx) { return hpktannos?(hpktannos + idx*anno_size):0;}
 	inline short *hpktlen(int idx) { return hpktlens?(hpktlens + idx):0;}
 
-	inline void *user_priv(unsigned long offset) { return (void*)(g4c_ptr_add(user_priv, offset)); }
+	inline void *get_user_priv(unsigned long offset) { return (void*)(g4c_ptr_add(user_priv, offset)); }
 };
 
 CLICK_ENDDECLS
