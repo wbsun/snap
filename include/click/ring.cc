@@ -42,10 +42,12 @@ void VarRing<T>::copy(const VarRing<T> &v)
 	_tail = v._tail;
 	_next = v._next;
 	_ring = (T*)CLICK_LALLOC(sizeof(T)*_capacity);
-	if (!_ring)
+	
+	if (!_ring) {
 		hvp_chatter("memory allocation failed\n");
-	else
-		memcpy(_ring, v._ring, sizeof(T)*_capacity);	
+	} else {
+		memcpy(_ring, v._ring, sizeof(T)*_capacity);
+	}
 }
 
 template <typename T>
@@ -62,7 +64,7 @@ inline int VarRing<T>::size() const
 	if (_tail < _head)
 		return _next+_capacity-_head;
 	else
-		retuen _tail - _head + 1;
+		return _tail - _head + 1;
 }
 
 template <typename T>
@@ -78,10 +80,10 @@ inline int VarRing<T>::capacity() const
 }
 
 template <typename T>
-bool VarRing<T>::reserve(int n);
+bool VarRing<T>::reserve(int n)
 {
 	if (n <= size() || n == _capacity)
-		return True;
+		return true;
 	
 	T* r =(T*)CLICK_LALLOC(sizeof(T)*n);
 	if (r) {
@@ -115,10 +117,10 @@ bool VarRing<T>::reserve(int n);
 	}
 	else {
 		hvp_chatter("memory allocation failed\n");
-		return False;
+		return false;
 	}
 
-	return True;
+	return true;
 }
 
 template <typename T>

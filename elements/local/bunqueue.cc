@@ -1,8 +1,9 @@
-#include <click/config.hh>
+#include <click/config.h>
 #include "bunqueue.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
 #include "batcher.hh"
+#include <click/confparse.hh>
 CLICK_DECLS
 
 const int BUnqueue::DEFAULT_LEN = (int)(1<<16);
@@ -74,5 +75,5 @@ BUnqueue::bpull(int port)
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(Batcher)
-EXPORT_ELEMENT(Bunqueue)
+EXPORT_ELEMENT(BUnqueue)
 ELEMENT_LIBS(-lg4c)

@@ -37,7 +37,7 @@ private:
 	bool _process_all;
 	bool _fast_sched;
 	int _drops;
-}
+};
 
 CLICK_ENDDECLS
 #endif

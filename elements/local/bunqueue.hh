@@ -10,7 +10,7 @@ CLICK_DECLS
 class BUnqueue : public Element {
 public:
 	BUnqueue();
-	~Bunqueue();
+	~BUnqueue();
 
 	const char *class_name() const { return "BUnqueue"; }
 	const char *port_count() const { return PORTS_1_1; }
@@ -31,7 +31,7 @@ private:
 	int _que_len;
 	LFRing<PBatch*> _que;
 	int _drops;
-}
+};
 
 CLICK_ENDDECLS
 #endif

@@ -5,7 +5,11 @@
 #include <clicknet/ip.h>
 #include <click/pbatch.hh>
 #include <g4c.h>
+#include <click/task.hh>
+#include <click/timer.hh>
 CLICK_DECLS
+
+#define CLICK_BATCH_TIMEOUT 2000
 
 /**
  * Batcher configurations:

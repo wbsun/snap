@@ -4,6 +4,8 @@
 #include <click/glue.hh>
 #include <click/standard/alignmentinfo.hh>
 #include <click/hvputils.hh>
+#include <click/confparse.hh>
+#include <click/pbatch.hh>
 CLICK_DECLS
 
 Batcher::Batcher(): _timer(this)
@@ -91,7 +93,7 @@ Batcher::add_packet(Packet *p)
 		_cur_batch_size = _batch->size();
 
 		unsigned long copysz = p->end_data() - p->mac_header();
-		if (_batch->slice_end > 0 && copysz > _batch->slice_length)
+		if (_batch->slice_end > 0 && copysz > (unsigned long)_batch->slice_length)
 			copysz = _batch->slice_length;
 
 		if (_batch->hpktlens) {
@@ -145,7 +147,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 			 "TIMEOUT", cpkN, cpInteger, &_timeout_ms,
 			 "SLICE_BEGIN", cpkN, cpInteger, &_slice_begin,
 			 "SLICE_END", cpkN, cpInteger, &_slice_end,
-			 "CAPACITY", cpkN, cpIntegaer, &_batch_capacity,
+			 "CAPACITY", cpkN, cpInteger, &_batch_capacity,
 			 "ANN_FLAGS", cpkN, cpByte, &_anno_flags,
 			 "FORCE_PKTLENS", cpkN, cpBool, &_force_pktlens,
 			 cpEnd) < 0)

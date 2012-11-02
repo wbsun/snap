@@ -14,7 +14,7 @@ private:
 public:
 	explicit VarRing();
 	explicit VarRing(int cap);
-	VarRing(const Ring<T> &v);
+	VarRing(const VarRing<T> &v);
 	~VarRing();
 	VarRing<T> &operator=(const VarRing<T> &v);
 	
@@ -113,7 +113,7 @@ public:
 };
 
 template <typename T> bool
-LFRing::reserve(int sz)
+LFRing<T>::reserve(int sz)
 {
 	assert(!_ring);
 	assert(sz > 0);
@@ -127,7 +127,7 @@ LFRing::reserve(int sz)
 }
 
 template <typename T> bool
-LFRing::add_new(T& v)
+LFRing<T>::add_new(T& v)
 {
 	assert(_ring);
 	if ((_head+1)%(_capacity+1) == _tail)
@@ -139,7 +139,7 @@ LFRing::add_new(T& v)
 }
 
 template <typename T> void
-LFRing::remove_oldest()
+LFRing<T>::remove_oldest()
 {
 	assert(_ring && _head!=_tail);
 	g4c_to_volatile(_tail) = (_tail+1)%(_capacity+1);

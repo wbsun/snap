@@ -1,7 +1,11 @@
 #ifndef CLICK_PBATCH_HH
 #define CLICK_PBATCH_HH
-#include <click/packet.hh>
+// I don't and don't want to know why putting this header at the beginning can avoid compilation errors.
+#include <click/ipaddress.hh>
+#include <click/glue.hh>
 #include <g4c.h>
+
+class Packet;
 
 #define CLICK_PBATCH_PACKET_BUFFER_SIZE 2048
 #define CLICK_PBATCH_CAPACITY 1024

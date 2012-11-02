@@ -1,8 +1,10 @@
-#include <click/config.hh>
+#include <click/config.h>
 #include "pushbatchqueue.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
 #include "batcher.hh"
+#include <click/confparse.hh>
+#include <click/standard/scheduleinfo.hh>
 CLICK_DECLS
 
 const int PushBatchQueue::DEFAULT_LEN = (int)(1<<16);

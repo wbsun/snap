@@ -27,7 +27,7 @@ public:
 private:
 	PBatch *_batch;
 	int _idx;
-}
+};
 
 CLICK_ENDDECLS
 #endif

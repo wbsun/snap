@@ -1,4 +1,4 @@
-#include <click/config.hh>
+#include <click/config.h>
 #include "debatcher.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>

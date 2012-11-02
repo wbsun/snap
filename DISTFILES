@@ -44,6 +44,7 @@ pathvars.h.in
 test
 tools
 userlevel
+hvpconfigure
 
 ./apps:
 ClickController
@@ -443,6 +444,7 @@ md5.h
 nameinfo.hh
 notifier.hh
 package.hh
+pbatch.hh
 packet.hh
 packet_anno.hh
 pair.hh
@@ -467,6 +469,8 @@ userutils.hh
 variableenv.hh
 vector.cc
 vector.hh
+ring.hh
+ring.cc
 
 ./include/click/standard:
 addressinfo.hh
@@ -527,6 +531,7 @@ master.cc
 md5.cc
 nameinfo.cc
 notifier.cc
+pbatch.cc
 packet.cc
 router.cc
 routerthread.cc
