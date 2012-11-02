@@ -1,3 +1,5 @@
+#include <click/config.h>
+#include <click/glue.hh>
 #include <click/pbatch.hh>
 #include <g4c.h>
 
@@ -24,6 +26,9 @@ PBatch::PBatch(int _capacity, int _slice_begin, int _slice_end, bool _force_pktl
 	shared(0), nr_users(0), user_priv_len(0), user_priv(0),
 	hpktflags(0), dpktflags(0)
 {
+	slice_begin = _slice_begin;
+	slice_end = _slice_end;
+	anno_size = _anno_length;
 	calculate_parameters();
 }
 
@@ -33,30 +38,27 @@ PBatch::~PBatch() {}
 void
 PBatch::calculate_parameters()
 {
-	slice_begin = _slice_begin;
-	if (_slice_end <= 0) {
-		slice_end = -1;
-		slice_length = CLICK_PBATH_PACKET_BUFFER_SIZE;
+	if (slice_end <= 0) {
+		slice_length = CLICK_PBATCH_PACKET_BUFFER_SIZE;
 		slice_size = slice_length;
 	} else {
-		slice_end = _slice_end;
-		slice_length = _slice_end - _slice_begin;
+		slice_length = slice_end - slice_begin;
 		slice_size = g4c_round_up(slice_length, G4C_MEM_ALIGN);
 	}
 
-	if (_anno_flags == 0)
+	if (anno_flags == 0)
 		anno_size = 0;
 	else
-		anno_size = g4c_round_up(_anno_length, G4C_MEM_ALIGN);
+		anno_size = g4c_round_up(anno_size, G4C_MEM_ALIGN);
 
 	memsize = 0;
-	if (_slice_end < 0||force_pktlens)
+	if (slice_end < 0||force_pktlens)
 		memsize += g4c_round_up(sizeof(short)*capacity, G4C_PAGE_SIZE);
 
 	memsize += g4c_round_up(sizeof(unsigned long)*capacity, G4C_PAGE_SIZE);
 	memsize += g4c_round_up(slice_size*capacity, G4C_PAGE_SIZE);
 
-        if (_anno_flags != 0)
+        if (anno_flags != 0)
 		memsize += g4c_round_up(anno_size*capacity, G4C_PAGE_SIZE);
 }
 
