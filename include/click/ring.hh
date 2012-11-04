@@ -134,7 +134,6 @@ LFRing<T>::add_new(T& v)
 		return false;
 	_ring[_head] = v;
 	g4c_to_volatile(_head) = (_head+1)%(_capacity+1);
-	g4c_var_barrier(_head);
 	return true;	
 }
 
@@ -143,7 +142,6 @@ LFRing<T>::remove_oldest()
 {
 	assert(_ring && _head!=_tail);
 	g4c_to_volatile(_tail) = (_tail+1)%(_capacity+1);
-	g4c_var_barrier(_tail);
 }
 
 CLICK_ENDDECLS
