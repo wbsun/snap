@@ -133,6 +133,9 @@ LFRing<T>::add_new(T& v)
 	if ((_head+1)%(_capacity+1) == _tail)
 		return false;
 	_ring[_head] = v;
+	asm volatile (
+		""::"m"(_ring[_head]),"m"(_head)
+		);
 	g4c_to_volatile(_head) = (_head+1)%(_capacity+1);
 	return true;	
 }
