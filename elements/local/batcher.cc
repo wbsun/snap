@@ -29,6 +29,10 @@ Batcher::~Batcher()
 {
 }
 
+/*
+ * Considering fixed size user private data so that we can use
+ * a memory pool for PBatch allocation.
+ */
 PBatch*
 Batcher::alloc_batch()
 {
@@ -41,7 +45,7 @@ Batcher::alloc_batch()
 		_batch->set_pointers();
 
 		// TODO:
-		//   A fater option is to not copy flags, lunching a kernel
+		//   A better option is to not copy flags, lunching a kernel
 		//   to init device size pktflags or using cudaMemset.
 		_batch->hwork_ptr = _batch->hostmem; 
 		_batch->dwork_ptr = _batch->devmem;
@@ -67,8 +71,8 @@ Batcher::kill_batch(PBatch *pb)
 {
 	pb->shared--;
 	if (pb->shared < 0) {
-		g4c_free_page_lock_mem(pb->hostmem, pb->memsize);
-		g4c_free_dev_mem(pb->devmem, pb->memsize);
+		g4c_free_page_lock_mem(pb->hostmem);
+		g4c_free_dev_mem(pb->devmem);
 
 		g4c_free_stream(pb->dev_stream);
 		free(pb->user_priv);
