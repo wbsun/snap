@@ -23,6 +23,7 @@ Batcher::Batcher(): _timer(this)
 	_timed_batch = 0;
 	_nr_users = 0;
 	_user_priv_len = 0;
+	_test = false;
 }
 
 Batcher::~Batcher()
@@ -91,12 +92,12 @@ Batcher::add_packet(Packet *p)
 {
 	int idx = _batch->size();
 
-	if (p->has_mac_header()) {
+	if (p->has_mac_header() || _test) {
 		_batch->npkts++;
 		_batch->pptrs[idx] = p;
 		_cur_batch_size = _batch->size();
 
-		unsigned long copysz = p->end_data() - p->mac_header();
+		unsigned long copysz = p->end_data() - (_test?p->data():p->mac_header());
 		if (_batch->slice_end > 0 && copysz > (unsigned long)_batch->slice_length)
 			copysz = _batch->slice_length;
 
@@ -106,7 +107,7 @@ Batcher::add_packet(Packet *p)
 
 		_batch->hpktflags = 0;
 		memcpy(_batch->hslice(idx),
-		       p->mac_header()+_batch->slice_begin,
+		       (_test?p->data():p->mac_header())+_batch->slice_begin,
 		       copysz);
 		
 		if (_batch->anno_flags & PBATCH_ANNO_READ) {
@@ -121,6 +122,7 @@ Batcher::add_packet(Packet *p)
 		}
 	} else {
 		hvp_chatter("add_packet(): packet has no MAC header\n");
+		p->kill();
 		_drops++;
 	}	
 }
@@ -154,6 +156,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 			 "CAPACITY", cpkN, cpInteger, &_batch_capacity,
 			 "ANN_FLAGS", cpkN, cpByte, &_anno_flags,
 			 "FORCE_PKTLENS", cpkN, cpBool, &_force_pktlens,
+			 "TEST", cpkN, cpBool, &_test,
 			 cpEnd) < 0)
 		return -1;
 	return 0;

@@ -69,6 +69,7 @@ private:
 
 	int _count;
 	int _drops;
+	bool _test;
 
 	PBatch *alloc_batch();
 	void add_packet(Packet *p);

@@ -41,6 +41,8 @@ GPURuntime::configure(Vector<String> &conf, ErrorHandler* errh)
 		hvp_chatter("GPURuntime G4C initialization failed!\n");
 		return -1;
 	}
+
+	hvp_chatter("G4C GPU runtime initialized.\n");
 	return 0;
 }
 
@@ -50,8 +52,10 @@ GPURuntime::cleanup(CleanupStage stage)
 	if (stage == CLEANUP_CONFIGURED ||
 	    stage == CLEANUP_INITIALIZE_FAILED ||
 	    stage == CLEANUP_INITIALIZED ||
-	    stage == CLEANUP_ROUTER_INITIALIZED )
+	    stage == CLEANUP_ROUTER_INITIALIZED ) {		
 		g4c_exit();
+		hvp_chatter("G4C GPU runtime cleaned up.\n");
+	}
 }
 
 CLICK_ENDDECLS
