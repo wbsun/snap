@@ -17,7 +17,7 @@ private:
 	size_t _hostmem_sz;
 	size_t _devmem_sz;
 	int _nr_streams;
-}
+};
 
 CLICK_ENDDECLS
 

@@ -17,7 +17,7 @@ GPURuntime::GPURuntime() {
 GPURuntime::~GPURuntime() {}
 
 int
-GPURuntime::configure(Vector<String>&, ErrorHandler* errh)
+GPURuntime::configure(Vector<String> &conf, ErrorHandler* errh)
 {
 	int ns = 0;
 	size_t hsz = 0, dsz = 0;
