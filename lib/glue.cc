@@ -174,7 +174,7 @@ click_chatter(const char *fmt, ...)
 	    errh->xmessage(ErrorHandler::e_info, fmt, val);
 	} else {
 #if CLICK_USERLEVEL
-	    fprintf("HVP @ %s::%d: ", filename, lineno);
+	    fprintf(stderr, "HVP @ %s::%d: ", filename, lineno);
 	    vfprintf(stderr, fmt, val);
 #endif
 	}
