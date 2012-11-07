@@ -165,19 +165,18 @@ click_chatter(const char *fmt, ...)
 }
 
     void
-    __hvp_chatter(const char *filename, int lineno, const char *fmt, ...)
+    __hvp_chatter(const char *fmt, ...)
     {
 	va_list val;
 	va_start(val, fmt);
 
-	if (ErrorHandler *errh = ErrorHandler::default_handler()) {
-	    errh->xmessage(ErrorHandler::e_info, fmt, val);
-	} else {
-#if CLICK_USERLEVEL
-	    fprintf(stderr, "HVP @ %s::%d: ", filename, lineno);
+//	if (ErrorHandler *errh = ErrorHandler::default_handler()) {
+//	    errh->message(fmt, val);
+//	} else {
+#if CLICK_USERLEVEL	    
 	    vfprintf(stderr, fmt, val);
 #endif
-	}
+//	}
 
 	va_end(val);
     }

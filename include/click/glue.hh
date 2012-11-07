@@ -81,8 +81,7 @@ extern "C" int simclick_gettimeofday(struct timeval *);
 // DEBUGGING OUTPUT
 extern "C" {
 void click_chatter(const char *fmt, ...);
-    void __hvp_chatter(const char *filename, int lineno,
-		       const char *fmt, ...);
+    void __hvp_chatter(const char *fmt, ...);
 }
 
 
