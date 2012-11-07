@@ -7,6 +7,7 @@ CLICK_DECLS
 
 H2D::H2D()
 {
+	_clear_pktflags = false;
 }
 
 H2D::~H2D()
@@ -38,6 +39,9 @@ H2D::bpush(int i, PBatch *pb)
 	}
 
 	g4c_h2d_async(pb->hwork_ptr, pb->dwork_ptr, pb->work_size, pb->dev_stream);
+	if (_clear_pktflags)
+		g4c_dev_memset(pb->dpktflags, 0, pb->capacity*sizeof(unsigned int),
+			       pb->dev_stream);
 	output(0).bpush(pb);
 }
 
@@ -50,6 +54,10 @@ H2D::drop_batch(PBatch *pb)
 int
 H2D::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+	if (cp_va_kparse(conf, this, errh,
+			 "CLEAR_PKTFLAGS", cpkN, cpBool, &_clear_pktflags,
+			 cpEnd) < 0)
+		return -1;
 	return 0;
 }
 

@@ -49,9 +49,10 @@ Batcher::alloc_batch()
 		// TODO:
 		//   A better option is to not copy flags, lunching a kernel
 		//   to init device size pktflags or using cudaMemset.
-		_batch->hwork_ptr = _batch->hostmem; 
-		_batch->dwork_ptr = _batch->devmem;
-		_batch->work_size = _batch->memsize;
+		_batch->hwork_ptr = (void*)_batch->hslices; 
+		_batch->dwork_ptr = (void*)_batch->dslices;
+		_batch->work_size = _batch->memsize -
+			g4c_ptr_offset(_batch->hslices, _batch->hpktflags);
 
 		_batch->nr_users = _nr_users;
 		_batch->user_priv_len = _user_priv_len;

@@ -33,7 +33,7 @@ public:
 	 *  ~  For roundup to PAGE_SIZE        ~
 	 *  |----------------------------------|
 	 *  |                                  |
-	 *  |  N * unsigned long: packet flags |
+	 *  |  N * unsigned int: packet flags |
 	 *  |                                  | 
 	 *  |----------------------------------|
 	 *  ~  For roundup to PAGE_SIZE        ~
@@ -64,13 +64,13 @@ public:
 	 * When negative, the packet is disabled.
 	 */
 	short *hpktlens;
-	unsigned long *hpktflags; /* 0 means normal, availabe.  */
+	unsigned int *hpktflags; /* 0 means normal, availabe.  */
 	unsigned char *hslices;
 	unsigned char *hpktannos;
 
 	// Device pointers
 	short *dpktlens;
-	unsigned long *dpktflags;
+	unsigned int *dpktflags;
 	unsigned char *dslices;
 	unsigned char *dpktannos;
 
@@ -142,7 +142,7 @@ public:
 	inline bool full() { return npkts >= capacity;}
 	inline int size() { return npkts; }
 
-	inline unsigned long *hpktflag(int idx) { return hpktflags + idx; }
+	inline unsigned int *hpktflag(int idx) { return hpktflags + idx; }
 	inline unsigned char *hslice(int idx) { return hslices + idx*slice_size;}
 	inline unsigned char *hanno(int idx) { return hpktannos?(hpktannos + idx*anno_size):0;}
 	inline short *hpktlen(int idx) { return hpktlens?(hpktlens + idx):0;}

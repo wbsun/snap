@@ -23,6 +23,9 @@ public:
 
 	int configure(Vector<String> &conf, ErrorHandler *errh);
 	int initialize(ErrorHandler *errh);
+
+private:
+	bool _clear_pktflags;
 };
 
 CLICK_ENDDECLS
