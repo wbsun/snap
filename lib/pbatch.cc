@@ -73,8 +73,8 @@ PBatch::set_pointers()
 		hpktlens = 0;
 		dpktlens = 0;
 
-		hpktflags = (unsigned long*)hostmem;
-		dpktflags = (unsigned long*)devmem;
+		hpktflags = (unsigned int*)hostmem;
+		dpktflags = (unsigned int*)devmem;
 	} else {
 		hpktlens = (short*)hostmem;
 		dpktlens = (short*)devmem;
