@@ -4,6 +4,7 @@
 #include <click/hvputils.hh>
 #include "batcher.hh"
 #include <click/confparse.hh>
+#include <click/timestamp.hh>
 CLICK_DECLS
 
 const int BUnqueue::DEFAULT_LEN = (int)(1<<16);
@@ -66,6 +67,8 @@ BUnqueue::bpull(int port)
 		PBatch *pb = _que.oldest();
 		if (g4c_stream_done(pb->dev_stream)) {
 			_que.remove_oldest();
+			hvp_chatter("batch %p done at %s\n", pb,
+				    Timestamp::now().unparse().c_str());
 			return pb;
 		} else
 			return 0;

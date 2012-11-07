@@ -6,6 +6,7 @@
 #include <click/hvputils.hh>
 #include <click/confparse.hh>
 #include <click/pbatch.hh>
+#include <click/timestamp.hh>
 CLICK_DECLS
 
 Batcher::Batcher(): _timer(this)
@@ -54,11 +55,13 @@ Batcher::alloc_batch()
 
 		_batch->nr_users = _nr_users;
 		_batch->user_priv_len = _user_priv_len;
-		_batch->user_priv = malloc(_user_priv_len);
-		if (!_batch->user_priv) {
-			hvp_chatter("Out of memory.\n");
-			kill_batch(_batch);
-			_batch = 0;
+		if (_user_priv_len != 0) {
+			_batch->user_priv = malloc(_user_priv_len);
+			if (!_batch->user_priv) {
+				hvp_chatter("Out of memory.\n");
+				kill_batch(_batch);
+				_batch = 0;
+			}
 		}
 	}
 
@@ -76,7 +79,8 @@ Batcher::kill_batch(PBatch *pb)
 		g4c_free_dev_mem(pb->devmem);
 
 		g4c_free_stream(pb->dev_stream);
-		free(pb->user_priv);
+		if (pb->user_priv)
+			free(pb->user_priv);
 		delete pb;
 		return true;
 	}
@@ -138,6 +142,10 @@ Batcher::push(int i, Packet *p)
 	_count++;
 	
 	if (_batch->full()) {
+		if (_test) {
+			hvp_chatter("batch %p full at %s\n", _batch,
+				    Timestamp::now().unparse().c_str());
+		}
 		if (_timer.scheduled())
 			_timer.clear();
 		PBatch *oldbatch = _batch;
