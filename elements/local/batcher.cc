@@ -181,9 +181,14 @@ Batcher::initialize(ErrorHandler *errh)
 void
 Batcher::run_timer(Timer *timer)
 {
-	if (_timed_batch != _batch || !_timed_batch)
+	PBatch *pb = _timed_batch;
+	if (pb != _batch || !pb)
 		return;
-	// NOT READY FOR TIMEPUT OPS YET.
+
+	alloc_batch();
+	if (_test)
+		hvp_chatter("batch %p(%d) timeout at %s\n", pb, pb->size(), Timestamp::now().unparse().c_str());
+	output(0).bpush(pb);
 }
 
 void

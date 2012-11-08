@@ -13,6 +13,7 @@ BUnqueue::BUnqueue()
 {
 	_que_len = DEFAULT_LEN;
 	_drops = 0;
+	_test = false;
 }
 
 BUnqueue::~BUnqueue()
@@ -24,6 +25,7 @@ BUnqueue::configure(Vector<String> &conf, ErrorHandler *errh)
 {
 	if (cp_va_kparse(conf, this, errh,
 			 "LENGTH", cpkN, cpInteger, &_que_len,
+			 "TEST", cpkN, cpBool, &_test,
 			 cpEnd) < 0)
 		return -1;
 	return 0;
@@ -67,8 +69,9 @@ BUnqueue::bpull(int port)
 		PBatch *pb = _que.oldest();
 		if (g4c_stream_done(pb->dev_stream)) {
 			_que.remove_oldest();
-			hvp_chatter("batch %p done at %s\n", pb,
-				    Timestamp::now().unparse().c_str());
+			if (_test)
+				hvp_chatter("batch %p done at %s\n", pb,
+					    Timestamp::now().unparse().c_str());
 			return pb;
 		} else
 			return 0;

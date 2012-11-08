@@ -34,7 +34,9 @@ private:
 	LFRing<PBatch*> _que;
 	Task _task;
 	bool _block;
+	bool _test;
 	bool _process_all;
+	bool _sched_on_new;
 	bool _fast_sched;
 	int _drops;
 };

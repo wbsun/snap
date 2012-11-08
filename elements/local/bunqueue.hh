@@ -31,6 +31,7 @@ private:
 	int _que_len;
 	LFRing<PBatch*> _que;
 	int _drops;
+	bool _test;
 };
 
 CLICK_ENDDECLS
