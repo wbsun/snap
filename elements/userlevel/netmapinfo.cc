@@ -49,7 +49,6 @@ NetmapInfo::ring::open(const String &ifname,
     struct nmreq req;
     memset(&req, 0, sizeof(req));
     strncpy(req.nr_name, ifname.c_str(), sizeof(req.nr_name));
-    req.nr_ringid = 0;
 #if NETMAP_API
     req.nr_version = NETMAP_API;
 #endif
@@ -61,11 +60,6 @@ NetmapInfo::ring::open(const String &ifname,
 	return -1;
     }
     size_t memsize = req.nr_memsize;
-
-    if ((r = ioctl(fd, NIOCREGIF, &req))) {
-	errh->error("netmap register %s: %s", ifname.c_str(), strerror(errno));
-	goto error;
-    }
 
     netmap_memory_lock.acquire();
     if (netmap_memory == MAP_FAILED) {
@@ -82,6 +76,17 @@ NetmapInfo::ring::open(const String &ifname,
     ++netmap_memory_users;
     netmap_memory_lock.release();
 
+    memset(&req, 0, sizeof(req));
+    strncpy(req.nr_name, ifname.c_str(), sizeof(req.nr_name));
+    req.nr_version = NETMAP_API;
+    req.nr_ringid = 0 | NETMAP_NO_TX_POLL;
+
+    if ((r = ioctl(fd, NIOCREGIF, &req))) {
+	errh->error("netmap register %s: %s", ifname.c_str(), strerror(errno));
+	goto error;
+    }
+
+
     nifp = NETMAP_IF(mem, req.nr_offset);
     return fd;
 }
@@ -91,7 +96,7 @@ NetmapInfo::ring::initialize_rings_rx(int timestamp)
 {
     ring_begin = 0;
     // 0 means "same count as the converse direction"
-    ring_end = nifp->ni_rx_queues ? nifp->ni_rx_queues : nifp->ni_tx_queues;
+    ring_end = nifp->ni_rx_rings ? nifp->ni_rx_rings : nifp->ni_tx_rings;
     if (timestamp >= 0) {
 	int flags = (timestamp > 0 ? NR_TIMESTAMP : 0);
 	for (unsigned i = ring_begin; i != ring_end; ++i)
@@ -103,7 +108,7 @@ void
 NetmapInfo::ring::initialize_rings_tx()
 {
     ring_begin = 0;
-    ring_end = nifp->ni_tx_queues ? nifp->ni_tx_queues : nifp->ni_rx_queues;
+    ring_end = nifp->ni_tx_rings ? nifp->ni_tx_rings : nifp->ni_rx_rings;
 }
 
 void

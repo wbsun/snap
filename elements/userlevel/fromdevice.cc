@@ -508,9 +508,11 @@ FromDevice::netmap_dispatch()
 #endif
 
 void
-FromDevice::selected(int, int)
+FromDevice::selected(int fd, int mask)
 {
 #if FROMDEVICE_ALLOW_NETMAP
+    if (! (mask & Element::SELECT_READ))
+	return;
     if (_method == method_netmap) {
 	int r = netmap_dispatch();
 	if (r > 0) {

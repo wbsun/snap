@@ -1,3 +1,4 @@
 #!/bin/bash
 
-./configure --prefix=$1 --enable-user-multithread --disable-linuxmodule --enable-local --enable-ipsec --enable-etherswitch
+./configure --prefix=$1 --enable-user-multithread --disable-linuxmodule --enable-local \
+--enable-ipsec --enable-etherswitch --with-netmap --enable-nanotimestamp --enable-select=poll
