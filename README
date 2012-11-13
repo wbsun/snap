@@ -1,4 +1,14 @@
 
-  HVP System.
+  (Previous HVP System)
+
+  Now part of Glick (GPU+Click) system. For old README from Click, read
+  README.old
+
+  Still under development.
+
+  Stability:
+    I can't guarrantee sucessful compilation and execution of commits
+    from my laptop, but commits from my GPU node are runnable for
+    most of time.
 
   wbsun@cs.utah.edu
