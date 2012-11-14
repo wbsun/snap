@@ -18,9 +18,15 @@ class NetmapInfo { public:
 
 	int open(const String &ifname,
 		 bool always_error, ErrorHandler *errh);
-	void initialize_rings_rx(int timestamp);
+	    int open_ring(const String &ifname, int ringid,
+			  bool always_error, ErrorHandler *errh);
+	void initialize_rings_rx(int timestamp);	    
 	void initialize_rings_tx();
 	void close(int fd);
+
+    private:
+	    int __open(const Sting &ifname, int ringid,
+		       bool always_error, ErrorHandler *errh);
     };
 
     static unsigned char *buffers;	// XXX not thread safe

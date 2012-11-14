@@ -126,6 +126,15 @@ Integer. Maximum number of packets to read per scheduling. Defaults to 1.
 
 Boolean. If false, then do not timestamp packets. Defaults to true.
 
+=item RING
+
+Integer. The NIC queue/ring (index) this element bind to. Defaults to -1, means
+no multi-queue enabled and open the device as a whole. 
+This requires presettting before running Click. In ixgbe case, users need to
+set RSS queue numbers and hashing rules.
+The multi-queue support is enabled by Netmap, so this argument only valid when
+Click is configured with --with-netmap.
+
 =back
 
 =e
@@ -175,7 +184,7 @@ class FromDevice : public Element { public:
     void add_handlers();
 
     inline String ifname() const	{ return _ifname; }
-    inline int fd() const		{ return _fd; }
+    inline int fd() const		{ return _fd; }	
 
     void selected(int fd, int mask);
 
@@ -193,6 +202,7 @@ class FromDevice : public Element { public:
 
 #if FROMDEVICE_ALLOW_NETMAP
     const NetmapInfo::ring *netmap() const { return _method == method_netmap ? &_netmap : 0; }
+	inline int dev_ringid() { return _ringid; }
 #endif
 
 #if FROMDEVICE_ALLOW_NETMAP || FROMDEVICE_ALLOW_PCAP
@@ -241,6 +251,9 @@ class FromDevice : public Element { public:
     counter_t _count;
 
     String _ifname;
+#if FROMDEVICE_ALLOW_NETMAP
+	int _ringid;
+#endif
     bool _sniffer : 1;
     bool _promisc : 1;
     bool _outbound : 1;

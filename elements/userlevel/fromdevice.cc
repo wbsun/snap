@@ -78,6 +78,10 @@ FromDevice::FromDevice()
 #if FROMDEVICE_ALLOW_LINUX || FROMDEVICE_ALLOW_PCAP || FROMDEVICE_ALLOW_NETMAP
     _fd = -1;
 #endif
+
+#if FROMDEVICE_ALLOW_NETMAP
+    _ringid = -1;
+#endif
 }
 
 FromDevice::~FromDevice()
@@ -93,6 +97,7 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     _headroom += (4 - (_headroom + 2) % 4) % 4; // default 4/2 alignment
     _force_ip = false;
     _burst = 1;
+    _ringid = -1;
     String bpf_filter, capture, encap_type;
     bool has_encap;
     if (Args(conf, this, errh)
@@ -109,6 +114,9 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("ENCAP", WordArg(), encap_type).read_status(has_encap)
 	.read("BURST", _burst)
 	.read("TIMESTAMP", timestamp)
+#if FROMDEVICE_ALLOW_NETMAP
+	.read("RING", _ringid)
+#endif
 	.complete() < 0)
 	return -1;
     if (_snaplen > 8190 || _snaplen < 14)
@@ -287,7 +295,10 @@ FromDevice::initialize(ErrorHandler *errh)
 
 #if FROMDEVICE_ALLOW_NETMAP
     if (_method == method_default || _method == method_netmap) {
-	_fd = _netmap.open(_ifname, _method == method_netmap, errh);
+	if (_ringid >= 0)
+	    _fd = _netmap.open_ring(_ifname, _ringid, _method == method_netmap, errh);
+	else
+	    _fd = _netmap.open(_ifname, _method == method_netmap, errh);
 	if (_fd >= 0) {
 	    _datalink = FAKE_DLT_EN10MB;
 	    _method = method_netmap;
@@ -402,7 +413,7 @@ FromDevice::cleanup(CleanupStage stage)
 	KernelFilter::device_filter(_ifname, false, ErrorHandler::default_handler());
 #if FROMDEVICE_ALLOW_NETMAP
     if (_fd >= 0 && _method == method_netmap)
-	_netmap.close(_fd);
+	    _netmap.close(_fd);
 #endif
 #if FROMDEVICE_ALLOW_LINUX
     if (_fd >= 0 && _method == method_linux) {

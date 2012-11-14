@@ -35,14 +35,17 @@ static uint32_t netmap_memory_users;
 unsigned char *NetmapInfo::buffers;
 
 int
-NetmapInfo::ring::open(const String &ifname,
-		       bool always_error, ErrorHandler *errh)
+NetmapInfo::ring::__open(const String &ifname, int ringid,
+			 bool always_error, ErrorHandler *errh)
 {
     ErrorHandler *initial_errh = always_error ? errh : ErrorHandler::silent_handler();
 
     int fd = ::open("/dev/netmap", O_RDWR);
     if (fd < 0) {
-	initial_errh->error("/dev/netmap: %s", strerror(errno));
+	if (ringid < 0)
+	    initial_errh->error("/dev/netmap: %s", strerror(errno));
+	else
+	    initial_errh->error("/dev/netmap@%d: %s", ringid, strerror(errno));
 	return -1;
     }
 
@@ -59,6 +62,13 @@ NetmapInfo::ring::open(const String &ifname,
 	close(fd);
 	return -1;
     }
+
+    if (ringid >= req.nr_rx_rings) {
+	initial_errh->error("netmap: requested ringid %d larger/equal than "
+			    "max ring number %u.", ringid, req.nr_rx_rings);
+	goto error;
+    }
+    
     size_t memsize = req.nr_memsize;
 
     netmap_memory_lock.acquire();
@@ -79,7 +89,10 @@ NetmapInfo::ring::open(const String &ifname,
     memset(&req, 0, sizeof(req));
     strncpy(req.nr_name, ifname.c_str(), sizeof(req.nr_name));
     req.nr_version = NETMAP_API;
-    req.nr_ringid = 0 | NETMAP_NO_TX_POLL;
+    if (ringid < 0)
+	req.nr_ringid = 0 | NETMAP_NO_TX_POLL;
+    else
+	req.nr_ringid = ((uint16_t) ringid) | NETMAP_NO_TX_POLL | NETMAP_HW_RING;
 
     if ((r = ioctl(fd, NIOCREGIF, &req))) {
 	errh->error("netmap register %s: %s", ifname.c_str(), strerror(errno));
@@ -89,6 +102,20 @@ NetmapInfo::ring::open(const String &ifname,
 
     nifp = NETMAP_IF(mem, req.nr_offset);
     return fd;
+}
+
+int
+NetmapInfo::ring::open(const String &ifname,
+			 bool always_error, ErrorHandler *errh)
+{
+    return __open(ifname, -1, always_error, errh);
+}
+
+int
+NetmapInfo::ring::open_ring(const String &ifname, int ringid,
+			 bool always_error, ErrorHandler *errh)
+{
+    return __open(ifname, ringid, always_error, errh);
 }
 
 void
