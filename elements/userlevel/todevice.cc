@@ -71,6 +71,9 @@ ToDevice::ToDevice()
     _fd = -1;
     _my_fd = false;
 #endif
+#if TODEVICE_ALLOW_NETMAP
+    _ringid = -1;
+#endif
 }
 
 ToDevice::~ToDevice()
@@ -82,11 +85,17 @@ ToDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     String method;
     _burst = 1;
+#if TODEVICE_ALLOW_NETMAP
+    _ringid = -1;
+#endif
     if (Args(conf, this, errh)
 	.read_mp("DEVNAME", _ifname)
 	.read("DEBUG", _debug)
 	.read("METHOD", WordArg(), method)
 	.read("BURST", _burst)
+#if TODEVICE_ALLOW_NETMAP
+	.read("RING", _ringid)
+#endif
 	.complete() < 0)
 	return -1;
     if (!_ifname)
@@ -133,7 +142,11 @@ ToDevice::find_fromdevice() const
     Router *r = router();
     for (int ei = 0; ei < r->nelements(); ++ei) {
 	FromDevice *fd = (FromDevice *) r->element(ei)->cast("FromDevice");
-	if (fd && fd->ifname() == _ifname && fd->fd() >= 0)
+	if (fd && fd->ifname() == _ifname
+#if TODEVICE_ALLOW_NETMAP
+	    && fd->dev_ringid() == _ringid
+#endif
+	    && fd->fd() >= 0)
 	    return fd;
     }
     return 0;
@@ -166,7 +179,11 @@ ToDevice::initialize(ErrorHandler *errh)
 	    _fd = fd->fd();
 	    _netmap = *fd->netmap();
 	} else {
-	    _fd = _netmap.open(_ifname, _method == method_netmap, errh);
+	    if (_ringid >= 0)
+		_fd = _netmap.open_ring(_ifname, _ringid,
+					_method == method_netmap, errh);
+	    else
+		_fd = _netmap.open(_ifname, _method == method_netmap, errh);
 	    if (_fd >= 0) {
 		_my_fd = true;
 		add_select(_fd, SELECT_READ); // NB NOT writable!

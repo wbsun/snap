@@ -99,7 +99,9 @@ class ToDevice : public Element { public:
 
     String ifname() const			{ return _ifname; }
     int fd() const				{ return _fd; }
-
+#if TODEVICE_ALLOW_NETMAP
+    inline int dev_ringid() { return _ringid; }
+#endif
     bool run_task(Task *);
     void selected(int fd, int mask);
 
@@ -118,6 +120,7 @@ class ToDevice : public Element { public:
 #if TODEVICE_ALLOW_NETMAP
     NetmapInfo::ring _netmap;
     int netmap_send_packet(Packet *p);
+    int _ringid;
 #endif
     enum { method_default, method_netmap, method_linux, method_pcap, method_devbpf, method_pcapfd };
     int _method;

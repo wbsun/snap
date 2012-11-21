@@ -202,7 +202,7 @@ class FromDevice : public Element { public:
 
 #if FROMDEVICE_ALLOW_NETMAP
     const NetmapInfo::ring *netmap() const { return _method == method_netmap ? &_netmap : 0; }
-	inline int dev_ringid() { return _ringid; }
+    inline int dev_ringid() { return _ringid; }
 #endif
 
 #if FROMDEVICE_ALLOW_NETMAP || FROMDEVICE_ALLOW_PCAP
@@ -252,7 +252,7 @@ class FromDevice : public Element { public:
 
     String _ifname;
 #if FROMDEVICE_ALLOW_NETMAP
-	int _ringid;
+    int _ringid;
 #endif
     bool _sniffer : 1;
     bool _promisc : 1;

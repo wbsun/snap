@@ -97,7 +97,9 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     _headroom += (4 - (_headroom + 2) % 4) % 4; // default 4/2 alignment
     _force_ip = false;
     _burst = 1;
+#if FROMDEVICE_ALLOW_NETMAP
     _ringid = -1;
+#endif
     String bpf_filter, capture, encap_type;
     bool has_encap;
     if (Args(conf, this, errh)
