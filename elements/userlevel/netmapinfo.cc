@@ -138,8 +138,6 @@ NetmapInfo::ring::initialize_rings_tx()
     ring_end = nifp->ni_tx_rings ? nifp->ni_tx_rings : nifp->ni_rx_rings;
 }
 
-#include <stdio.h>
-
 void
 NetmapInfo::ring::close(int fd)
 {
@@ -148,8 +146,6 @@ NetmapInfo::ring::close(int fd)
     if (--netmap_memory_users <= 0 && netmap_memory != MAP_FAILED) {
 	munmap(netmap_memory, netmap_memory_size);
 	netmap_memory = MAP_FAILED;
-	click_chatter("Netmap munmapped.\n");
-	printf("Netmap munmapped.\n");
     }
     netmap_memory_lock.release();
     ::close(fd);

@@ -46,15 +46,12 @@ GPURuntime::configure(Vector<String> &conf, ErrorHandler* errh)
     return 0;
 }
 
-#include <stdio.h>
-
 void
 GPURuntime::cleanup(CleanupStage stage)
 {
     if (stage >= CLEANUP_CONFIGURED) {		
 	g4c_exit();
 	hvp_chatter("G4C GPU runtime cleaned up.\n");
-	printf("G4C GPU runtime cleaned up.\n");
     }
 }
 
