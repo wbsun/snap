@@ -25,7 +25,7 @@ class NetmapInfo { public:
 	void close(int fd);
 
     private:
-	    int __open(const Sting &ifname, int ringid,
+	    int __open(const String &ifname, int ringid,
 		       bool always_error, ErrorHandler *errh);
     };
 
