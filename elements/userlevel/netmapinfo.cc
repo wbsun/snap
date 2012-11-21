@@ -106,14 +106,14 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 
 int
 NetmapInfo::ring::open(const String &ifname,
-			 bool always_error, ErrorHandler *errh)
+		       bool always_error, ErrorHandler *errh)
 {
     return __open(ifname, -1, always_error, errh);
 }
 
 int
 NetmapInfo::ring::open_ring(const String &ifname, int ringid,
-			 bool always_error, ErrorHandler *errh)
+			    bool always_error, ErrorHandler *errh)
 {
     return __open(ifname, ringid, always_error, errh);
 }

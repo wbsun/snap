@@ -8,25 +8,25 @@ CLICK_DECLS
 
 class DeBatcher : public Element {
 public:
-	DeBatcher();
-	~DeBatcher();
+    DeBatcher();
+    ~DeBatcher();
 
-	const char *class_name() const { return "DeBatcher"; }
-	const char *port_count() const { return PORTS_1_1; }
-	const char *processing() const { return AGNOSTIC; }
+    const char *class_name() const { return "DeBatcher"; }
+    const char *port_count() const { return PORTS_1_1; }
+    const char *processing() const { return AGNOSTIC; }
 
-	void push(int i, Packet *p); // should never be called.
-	void bpush(int i, PBatch *pb);
+    void push(int i, Packet *p); // should never be called.
+    void bpush(int i, PBatch *pb);
 
-	Packet *pull(int port); 
-	PBatch *bpull(int port); // should never be called.
+    Packet *pull(int port); 
+    PBatch *bpull(int port); // should never be called.
 
-	int configure(Vector<String> &conf, ErrorHandler *errh);
-	int initialize(ErrorHandler *errh);
+    int configure(Vector<String> &conf, ErrorHandler *errh);
+    int initialize(ErrorHandler *errh);
 
 private:
-	PBatch *_batch;
-	int _idx;
+    PBatch *_batch;
+    int _idx;
 };
 
 CLICK_ENDDECLS

@@ -9,29 +9,29 @@ CLICK_DECLS
 
 class BUnqueue : public Element {
 public:
-	BUnqueue();
-	~BUnqueue();
+    BUnqueue();
+    ~BUnqueue();
 
-	const char *class_name() const { return "BUnqueue"; }
-	const char *port_count() const { return PORTS_1_1; }
-	const char *processing() const { return PUSH_TO_PULL; }
+    const char *class_name() const { return "BUnqueue"; }
+    const char *port_count() const { return PORTS_1_1; }
+    const char *processing() const { return PUSH_TO_PULL; }
 
-	void push(int i, Packet *p); // Should never be called.
-	void bpush(int i, PBatch *pb);
+    void push(int i, Packet *p); // Should never be called.
+    void bpush(int i, PBatch *pb);
 
-	Packet *pull(int port); // Should never be called.
-	PBatch *bpull(int port);
+    Packet *pull(int port); // Should never be called.
+    PBatch *bpull(int port);
 
-	int configure(Vector<String> &conf, ErrorHandler *errh);
-	int initialize(ErrorHandler *errh);
+    int configure(Vector<String> &conf, ErrorHandler *errh);
+    int initialize(ErrorHandler *errh);
 
-	static const int DEFAULT_LEN;
+    static const int DEFAULT_LEN;
 
 private:
-	int _que_len;
-	LFRing<PBatch*> _que;
-	int _drops;
-	bool _test;
+    int _que_len;
+    LFRing<PBatch*> _que;
+    int _drops;
+    bool _test;
 };
 
 CLICK_ENDDECLS

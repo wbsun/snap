@@ -10,25 +10,25 @@ CLICK_DECLS
 
 class NetmapInfo { public:
 
-    struct ring {
-	char *mem;
-	unsigned ring_begin;
-	unsigned ring_end;
-	struct netmap_if *nifp;
+	struct ring {
+	    char *mem;
+	    unsigned ring_begin;
+	    unsigned ring_end;
+	    struct netmap_if *nifp;
 	    struct nmreq req;
 
-	int open(const String &ifname,
-		 bool always_error, ErrorHandler *errh);
+	    int open(const String &ifname,
+		     bool always_error, ErrorHandler *errh);
 	    int open_ring(const String &ifname, int ringid,
 			  bool always_error, ErrorHandler *errh);
-	void initialize_rings_rx(int timestamp);	    
-	void initialize_rings_tx();
-	void close(int fd);
+	    void initialize_rings_rx(int timestamp);	    
+	    void initialize_rings_tx();
+	    void close(int fd);
 
-    private:
+	private:
 	    int __open(const String &ifname, int ringid,
 		       bool always_error, ErrorHandler *errh);
-    };
+	};
 
     static unsigned char *buffers;	// XXX not thread safe
     static bool is_netmap_buffer(Packet *p) {

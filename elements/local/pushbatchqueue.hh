@@ -13,32 +13,32 @@ CLICK_DECLS
  */
 class PushBatchQueue : public Element {
 public:
-	PushBatchQueue();
-	~PushBatchQueue();
+    PushBatchQueue();
+    ~PushBatchQueue();
 
-	const char *class_name() const { return "PushBatchQueue"; }
-	const char *port_count() const { return PORTS_1_1; }
-	const char *processing() const { return PUSH; }
+    const char *class_name() const { return "PushBatchQueue"; }
+    const char *port_count() const { return PORTS_1_1; }
+    const char *processing() const { return PUSH; }
 
-	void push(int i, Packet *p); // Should never be called.
-	void bpush(int i, PBatch *pb);
+    void push(int i, Packet *p); // Should never be called.
+    void bpush(int i, PBatch *pb);
 
-	bool run_task(Task *task);
+    bool run_task(Task *task);
 
-	int configure(Vector<String> &conf, ErrorHandler *errh);
-	int initialize(ErrorHandler *errh);
+    int configure(Vector<String> &conf, ErrorHandler *errh);
+    int initialize(ErrorHandler *errh);
 
-	static const int DEFAULT_LEN;
+    static const int DEFAULT_LEN;
 private:
-	int _que_len;
-	LFRing<PBatch*> _que;
-	Task _task;
-	bool _block;
-	bool _test;
-	bool _process_all;
-	bool _sched_on_new;
-	bool _fast_sched;
-	int _drops;
+    int _que_len;
+    LFRing<PBatch*> _que;
+    Task _task;
+    bool _block;
+    bool _test;
+    bool _process_all;
+    bool _sched_on_new;
+    bool _fast_sched;
+    int _drops;
 };
 
 CLICK_ENDDECLS
