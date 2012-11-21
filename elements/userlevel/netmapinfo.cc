@@ -49,7 +49,7 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 	return -1;
     }
 
-    struct nmreq req;
+//     struct nmreq req;
     memset(&req, 0, sizeof(req));
     strncpy(req.nr_name, ifname.c_str(), sizeof(req.nr_name));
 #if NETMAP_API
@@ -138,16 +138,20 @@ NetmapInfo::ring::initialize_rings_tx()
     ring_end = nifp->ni_tx_rings ? nifp->ni_tx_rings : nifp->ni_rx_rings;
 }
 
+#include <stdio.h>
+
 void
 NetmapInfo::ring::close(int fd)
 {
+    ioctl(fd, NIOCUNREGIF, &req);
     netmap_memory_lock.acquire();
     if (--netmap_memory_users <= 0 && netmap_memory != MAP_FAILED) {
 	munmap(netmap_memory, netmap_memory_size);
 	netmap_memory = MAP_FAILED;
+	click_chatter("Netmap munmapped.\n");
+	printf("Netmap munmapped.\n");
     }
     netmap_memory_lock.release();
-    ioctl(fd, NIOCUNREGIF, (struct nmreq *) 0);
     ::close(fd);
 }
 

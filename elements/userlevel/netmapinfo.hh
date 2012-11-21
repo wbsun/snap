@@ -15,6 +15,7 @@ class NetmapInfo { public:
 	unsigned ring_begin;
 	unsigned ring_end;
 	struct netmap_if *nifp;
+	    struct nmreq req;
 
 	int open(const String &ifname,
 		 bool always_error, ErrorHandler *errh);

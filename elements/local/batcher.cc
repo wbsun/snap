@@ -97,39 +97,34 @@ Batcher::add_packet(Packet *p)
 {
 	int idx = _batch->size();
 
-	if (p->has_mac_header() || _test) {
-		_batch->npkts++;
-		_batch->pptrs[idx] = p;
-		_cur_batch_size = _batch->size();
+	_batch->npkts++;
+	_batch->pptrs[idx] = p;
+	_cur_batch_size = _batch->size();
 
-		unsigned long copysz = p->end_data() - (_test?p->data():p->mac_header());
-		if (_batch->slice_end > 0 && copysz > (unsigned long)_batch->slice_length)
-			copysz = _batch->slice_length;
+	const unsigned char *start = p->has_mac_header()?p->mac_header():p->data();
+	unsigned long copysz = p->end_data() - start;
+	if (_batch->slice_end > 0 && copysz > (unsigned long)_batch->slice_length)
+		copysz = _batch->slice_length;
 
-		if (_batch->hpktlens) {
-			*_batch->hpktlen(idx) = copysz;
-		}
+	if (_batch->hpktlens) {
+		*_batch->hpktlen(idx) = copysz;
+	}
 
-		_batch->hpktflags = 0;
-		memcpy(_batch->hslice(idx),
-		       (_test?p->data():p->mac_header())+_batch->slice_begin,
-		       copysz);
+	_batch->hpktflags = 0;
+	memcpy(_batch->hslice(idx),
+	       start+_batch->slice_begin,
+	       copysz);
 		
-		if (_batch->anno_flags & PBATCH_ANNO_READ) {
-			memcpy(_batch->hanno(idx),
-			       p->anno(),
-			       Packet::anno_size);
-		}
+	if (_batch->anno_flags & PBATCH_ANNO_READ) {
+		memcpy(_batch->hanno(idx),
+		       p->anno(),
+		       Packet::anno_size);
+	}
 
-		if (idx == 0 && _timeout_ms > 0) {			
-			_timer.schedule_after_msec(_timeout_ms);
-			_timed_batch = _batch;
-		}
-	} else {
-		hvp_chatter("add_packet(): packet has no MAC header\n");
-		p->kill();
-		_drops++;
-	}	
+	if (idx == 0 && _timeout_ms > 0) {			
+		_timer.schedule_after_msec(_timeout_ms);
+		_timed_batch = _batch;
+	}		
 }
 
 void
