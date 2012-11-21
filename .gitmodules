@@ -1,0 +1,6 @@
+[submodule "libg4c"]
+	path = libg4c
+	url = git@github.com:wbsun/g4c.git
+[submodule "g4cnm"]
+	path = g4cnm
+	url = git@github.com:wbsun/nm.git
