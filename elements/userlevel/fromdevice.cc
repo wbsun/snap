@@ -408,6 +408,7 @@ FromDevice::initialize(ErrorHandler *errh)
     return 0;
 }
 
+#include <stdio.h>
 void
 FromDevice::cleanup(CleanupStage stage)
 {

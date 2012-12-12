@@ -103,7 +103,8 @@ Batcher::add_packet(Packet *p)
 
     const unsigned char *start = p->has_mac_header()?p->mac_header():p->data();
     unsigned long copysz = p->end_data() - start;
-    if (_batch->slice_end > 0 && copysz > (unsigned long)_batch->slice_length)
+    if (_batch->slice_end > 0
+	&& (copysz-_batch->slice_begin) > (unsigned long)_batch->slice_length)
 	copysz = _batch->slice_length;
 
     if (_batch->hpktlens) {

@@ -31,6 +31,7 @@ public:
     };
 
     static unsigned char *buffers;	// XXX not thread safe
+    
     static bool is_netmap_buffer(Packet *p) {
 	return p->buffer_destructor() == buffer_destructor;
     }

@@ -167,7 +167,7 @@ Returns a string indicating the encapsulation type on this link. Can be
 
 =a ToDevice.u, FromDump, ToDump, KernelFilter, FromDevice(n) */
 
-class FromDevice : public Element { public:
+class FromDevice : public Element { public:	
 
     FromDevice();
     ~FromDevice();

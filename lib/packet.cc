@@ -24,6 +24,7 @@
 #include <click/packet_anno.hh>
 #include <click/glue.hh>
 #include <click/sync.hh>
+#include <click/error.hh>
 #if CLICK_USERLEVEL
 # include <unistd.h>
 #endif
@@ -227,8 +228,8 @@ Packet::~Packet()
 
 # if HAVE_CLICK_PACKET_POOL
 #  define CLICK_PACKET_POOL_BUFSIZ		2048
-#  define CLICK_PACKET_POOL_SIZE		1000 // see LIMIT in packetpool-01.testie
-#  define CLICK_GLOBAL_PACKET_POOL_COUNT	16
+#  define CLICK_PACKET_POOL_SIZE		(1<<20) // see LIMIT in packetpool-01.testie
+#  define CLICK_GLOBAL_PACKET_POOL_COUNT	8
 namespace {
 struct PacketData {
     PacketData *next;
@@ -271,6 +272,29 @@ get_packet_pool()
 #  else
 static PacketPool packet_pool;
 #  endif
+
+
+int
+WritablePacket::pool_initialize()
+{
+#if CLICK_USERLEVEL
+    WritablePacket *p;
+    int i=0;
+    while(i++ < CLICK_GLOBAL_PACKET_POOL_COUNT-1) { // do not fill up, 1 left.
+	int j=0;
+	if (!(p = new WritablePacket[CLICK_PACKET_POOL_SIZE])) {
+	    ErrorHandler::default_handler()->warning("Memalloc failed for packet pool initialization.");
+	    return -1;
+	}	
+	do {
+	    p[j].initialize();
+	    recycle(p+j);
+	} while (++j < CLICK_PACKET_POOL_SIZE);	    
+    }
+    ErrorHandler::default_handler()->message("Packet pool initialized.");
+#endif
+    return 0;
+}
 
 WritablePacket *
 WritablePacket::pool_allocate(bool with_data)

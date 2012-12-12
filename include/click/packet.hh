@@ -786,6 +786,9 @@ class WritablePacket : public Packet { public:
     static WritablePacket *pool_allocate(uint32_t headroom, uint32_t length,
 					 uint32_t tailroom);
     static void recycle(WritablePacket *p);
+public:
+    static int pool_initialize();
+private:
 #endif
 
     friend class Packet;
