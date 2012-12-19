@@ -26,6 +26,7 @@ public:
 
 private:
     bool _clear_pktflags;
+    bool _test;
 };
 
 CLICK_ENDDECLS

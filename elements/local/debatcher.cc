@@ -44,6 +44,12 @@ DeBatcher::pull(int port)
 	_batch = input(0).bpull();
 	if (!_batch)
 	    return 0;
+
+	if (_batch->dev_stream) {
+	    g4c_free_stream(_batch->dev_stream);
+	    _batch->dev_stream = 0;
+	}
+	
 	if (_batch->size() == 0) {
 	    Batcher::kill_batch(_batch);
 	    goto pull_batch;
@@ -65,6 +71,11 @@ DeBatcher::pull(int port)
 void
 DeBatcher::bpush(int i, PBatch *pb)
 {
+    if (_batch->dev_stream) {
+	g4c_free_stream(_batch->dev_stream);
+	_batch->dev_stream = 0;
+    }
+    
     for (int j = 0; j < pb->size(); j++)
 	output(0).push(pb->pptrs[j]);
     Batcher::kill_batch(pb);

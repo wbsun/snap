@@ -5,6 +5,7 @@
 #include "batcher.hh"
 #include <click/confparse.hh>
 #include <click/timestamp.hh>
+#include <click/atomic.hh>
 CLICK_DECLS
 
 const int BUnqueue::DEFAULT_LEN = (int)(1<<16);
@@ -14,6 +15,7 @@ BUnqueue::BUnqueue()
     _que_len = DEFAULT_LEN;
     _drops = 0;
     _test = false;
+    _qlock = 0;
 }
 
 BUnqueue::~BUnqueue()
@@ -54,10 +56,15 @@ BUnqueue::pull(int port)
 void
 BUnqueue::bpush(int i, PBatch *pb)
 {
+//    while(atomic_uint32_t::swap(_qlock, 1) == 1);
     if (!_que.add_new(pb)) {
-	_drops = pb->size();
-	Batcher::kill_batch(pb);
+	_drops += pb->size();
+	Batcher::kill_batch(pb, true);
     }
+    if (_test)
+	hvp_chatter("new batch %p added stream %d.\n",
+		    pb, pb->dev_stream);
+    _qlock = 0;
 }
 
 PBatch *
@@ -66,15 +73,19 @@ BUnqueue::bpull(int port)
     if (_que.empty())
 	return 0;
     else {
+//	while(atomic_uint32_t::swap(_qlock, 1) == 1);
 	PBatch *pb = _que.oldest();
-	if (g4c_stream_done(pb->dev_stream)) {
+	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream)) {
 	    _que.remove_oldest();
 	    if (_test)
 		hvp_chatter("batch %p done at %s\n", pb,
 			    Timestamp::now().unparse().c_str());
+	    _qlock = 0;
 	    return pb;
-	} else
+	} else {
 	    return 0;
+	    _qlock = 0;
+	}
     }
 }
 

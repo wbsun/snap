@@ -7,6 +7,9 @@
 #include <g4c.h>
 #include <click/task.hh>
 #include <click/timer.hh>
+#include <click/ring.hh>
+#include <list>
+using namespace std;
 CLICK_DECLS
 
 #define CLICK_BATCH_TIMEOUT 2000
@@ -49,7 +52,7 @@ public:
 	    return cur;
 	}
 
-    static bool kill_batch(PBatch *pb);
+    static bool kill_batch(PBatch *pb, bool killpkt=false);
 
 private:
     int _batch_capacity;
@@ -72,8 +75,11 @@ private:
     bool _test;
 
     PBatch *alloc_batch();
+    PBatch *__alloc_batch();
     void add_packet(Packet *p);
 
+    static list<PBatch*> _pbpool;
+    static bool realkill_batch(PBatch *pb);
 };
 
 CLICK_ENDDECLS

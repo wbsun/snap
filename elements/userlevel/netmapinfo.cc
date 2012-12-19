@@ -33,6 +33,7 @@ static size_t netmap_memory_size;
 static uint32_t netmap_memory_users;
 
 unsigned char *NetmapInfo::buffers;
+Spinlock NetmapInfo::buffers_lock;
 
 int
 NetmapInfo::ring::__open(const String &ifname, int ringid,
@@ -90,9 +91,9 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
     strncpy(req.nr_name, ifname.c_str(), sizeof(req.nr_name));
     req.nr_version = NETMAP_API;
     if (ringid < 0)
-	req.nr_ringid = 0 | NETMAP_NO_TX_POLL;
+	req.nr_ringid = 0;
     else
-	req.nr_ringid = ((uint16_t) ringid) | NETMAP_NO_TX_POLL | NETMAP_HW_RING;
+	req.nr_ringid = ((uint16_t) ringid) | NETMAP_HW_RING;
 
     if ((r = ioctl(fd, NIOCREGIF, &req))) {
 	errh->error("netmap register %s: %s", ifname.c_str(), strerror(errno));

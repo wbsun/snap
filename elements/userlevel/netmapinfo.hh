@@ -6,6 +6,7 @@
 #include <net/netmap_user.h>
 #include <click/packet.hh>
 #include <click/error.hh>
+#include <click/sync.hh>
 CLICK_DECLS
 
 class NetmapInfo {
@@ -31,15 +32,20 @@ public:
     };
 
     static unsigned char *buffers;	// XXX not thread safe
+    static Spinlock buffers_lock;
     
     static bool is_netmap_buffer(Packet *p) {
 	return p->buffer_destructor() == buffer_destructor;
     }
     static void buffer_destructor(unsigned char *buf, size_t) {
+//	buffers_lock.acquire();
 	*reinterpret_cast<unsigned char **>(buf) = buffers;
 	buffers = buf;
+//	buffers_lock.release();
     }
     static bool refill(struct netmap_ring *ring) {
+	bool rt = false;
+//	buffers_lock.acquire();
 	if (buffers) {
 	    unsigned char *buf = buffers;
 	    buffers = *reinterpret_cast<unsigned char **>(buffers);
@@ -47,9 +53,10 @@ public:
 	    ring->slot[res1idx].buf_idx = NETMAP_BUF_IDX(ring, (char *) buf);
 	    ring->slot[res1idx].flags |= NS_BUF_CHANGED;
 	    --ring->reserved;
-	    return true;
-	} else
-	    return false;
+	    rt = true;
+	}
+//	buffers_lock.release();
+	return rt;
     }
 
 };

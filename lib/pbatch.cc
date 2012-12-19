@@ -38,7 +38,7 @@ PBatch::~PBatch() {}
 void
 PBatch::calculate_parameters()
 {
-    if (slice_end <= 0) {
+    if (slice_end < 0) {
 	slice_length = CLICK_PBATCH_PACKET_BUFFER_SIZE;
 	slice_size = slice_length;
     } else {
@@ -69,7 +69,7 @@ PBatch::calculate_parameters()
 void
 PBatch::set_pointers()
 {
-    if (slice_end > 0 && !force_pktlens) {
+    if (slice_end >= 0 && !force_pktlens) {
 	hpktlens = 0;
 	dpktlens = 0;
 

@@ -304,7 +304,7 @@ FromDevice::initialize(ErrorHandler *errh)
 	if (_fd >= 0) {
 	    _datalink = FAKE_DLT_EN10MB;
 	    _method = method_netmap;
-	    _netmap.initialize_rings_rx(_timestamp);
+	    _netmap.initialize_rings_rx(0);//_timestamp);
 	}
     }
 #endif
@@ -439,6 +439,7 @@ FromDevice::cleanup(CleanupStage stage)
 void
 FromDevice::emit_packet(WritablePacket *p, int extra_len, const Timestamp &ts)
 {
+#if 0
     // set packet type annotation
     if (p->data()[0] & 1) {
 	if (EtherAddress::is_broadcast(p->data()))
@@ -456,6 +457,8 @@ FromDevice::emit_packet(WritablePacket *p, int extra_len, const Timestamp &ts)
 	output(0).push(p);
     else
 	checked_output_push(1, p);
+#endif
+    output(0).push(p);
 }
 #endif
 
@@ -487,6 +490,10 @@ FromDevice::netmap_dispatch()
 
 	while (ring->reserved > 0 && NetmapInfo::refill(ring))
 	    /* click_chatter("Refilled") */;
+
+	click_chatter("netmap ring %u slots, av %u, rings %u",
+		      ring->num_slots, ring->avail,
+		      _netmap.ring_end - _netmap.ring_begin);
 
 	if (ring->avail == 0)
 	    continue;

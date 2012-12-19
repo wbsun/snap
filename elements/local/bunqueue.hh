@@ -1,5 +1,6 @@
 #ifndef CLICK_BUNQUEUE_HH
 #define CLICK_BUNQUEUE_HH
+#include <click/config.h>
 #include <click/element.hh>
 #include <click/glue.hh>
 #include <click/pbatch.hh>
@@ -29,6 +30,7 @@ public:
 
 private:
     int _que_len;
+    volatile uint32_t _qlock;
     LFRing<PBatch*> _que;
     int _drops;
     bool _test;

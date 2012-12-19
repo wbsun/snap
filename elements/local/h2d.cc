@@ -8,6 +8,7 @@ CLICK_DECLS
 H2D::H2D()
 {
     _clear_pktflags = false;
+    _test = false;
 }
 
 H2D::~H2D()
@@ -33,6 +34,9 @@ H2D::bpush(int i, PBatch *pb)
     if (pb->dev_stream == 0) {
 	pb->dev_stream = g4c_alloc_stream();
 	if (pb->dev_stream == 0) {
+	    if (_test) {
+		hvp_chatter("Drop pbatch %p because of stream shortage\n", pb);
+	    }
 	    drop_batch(pb);
 	    return;
 	}
@@ -48,7 +52,7 @@ H2D::bpush(int i, PBatch *pb)
 void
 H2D::drop_batch(PBatch *pb)
 {
-    Batcher::kill_batch(pb);	
+    Batcher::kill_batch(pb, true);	
 }
 
 int
@@ -56,6 +60,7 @@ H2D::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_kparse(conf, this, errh,
 		     "CLEAR_PKTFLAGS", cpkN, cpBool, &_clear_pktflags,
+		     "TEST", cpkN, cpBool, &_test,
 		     cpEnd) < 0)
 	return -1;
     return 0;
