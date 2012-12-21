@@ -7,7 +7,13 @@
 #include <click/packet.hh>
 #include <click/error.hh>
 #include <click/sync.hh>
+#include <click/ring.hh>
+#include <click/glue.hh>
 CLICK_DECLS
+
+#ifndef NM_BUF_SLOTS
+#define NM_BUF_SLOTS 65536
+#endif
 
 class NetmapInfo {
 public:
@@ -17,6 +23,14 @@ public:
 	unsigned ring_end;
 	struct netmap_if *nifp;
 	struct nmreq req;
+	bool rx, tx;
+	bool per_ring;
+
+	ring() {
+	    rx = false;
+	    tx = false;
+	    per_ring = false;
+	}
 
 	int open(const String &ifname,
 		 bool always_error, ErrorHandler *errh);
@@ -32,20 +46,29 @@ public:
     };
 
     static unsigned char *buffers;	// XXX not thread safe
-    static Spinlock buffers_lock;
+
+    static LFRing<unsigned char*> *buf_pools;
+    static uint32_t *buf_consumer_locks;
+    static int nr_buf_consumers;
+    static int nr_threads;
+    static bool initialized;
+    static bool need_consumer_locking;
+
+    static void register_buf_consumer() {
+	nr_buf_consumers++;
+    }	
+
+    static int initialize(int nthreads, ErrorHandler *errh);
     
     static bool is_netmap_buffer(Packet *p) {
 	return p->buffer_destructor() == buffer_destructor;
     }
     static void buffer_destructor(unsigned char *buf, size_t) {
-//	buffers_lock.acquire();
 	*reinterpret_cast<unsigned char **>(buf) = buffers;
 	buffers = buf;
-//	buffers_lock.release();
     }
     static bool refill(struct netmap_ring *ring) {
 	bool rt = false;
-//	buffers_lock.acquire();
 	if (buffers) {
 	    unsigned char *buf = buffers;
 	    buffers = *reinterpret_cast<unsigned char **>(buffers);
@@ -55,7 +78,6 @@ public:
 	    --ring->reserved;
 	    rt = true;
 	}
-//	buffers_lock.release();
 	return rt;
     }
 

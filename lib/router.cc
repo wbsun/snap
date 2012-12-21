@@ -51,6 +51,8 @@
 # include "../elements/ns/fromsimdevice.hh"
 #endif
 
+#include <click/nmruntime.hh>
+
 CLICK_DECLS
 
 /** @file router.hh
@@ -1145,6 +1147,11 @@ Router::initialize(ErrorHandler *errh)
 	    } else
 		element_stage[i] = Element::CLEANUP_CONFIGURED;
 	}
+    }
+
+    // Initialize netmap runtime:
+    if (NMRuntime::initialize(master()->nthreads())) {
+	errh->error("Netmap Runtime initialization failed");
     }
 
 #if CLICK_DMALLOC

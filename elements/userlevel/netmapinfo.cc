@@ -32,8 +32,50 @@ static void *netmap_memory = MAP_FAILED;
 static size_t netmap_memory_size;
 static uint32_t netmap_memory_users;
 
-unsigned char *NetmapInfo::buffers;
-Spinlock NetmapInfo::buffers_lock;
+LFRing<unsigned char*> *NetmapInfo::buf_pools;
+uint32_t *NetmapInfo::buf_consumer_locks;
+int NetmapInfo::nr_threads;
+bool NetmapInfo::initialized = false;
+
+int
+NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
+{
+    if (nthreads < 1) {
+	errh->fatal("NetmapInfo gets invalide #threads %d", nthreads);
+	return -1;
+    }
+
+    if (!initialized) {
+	nr_threads = nthreads;
+
+	if (nr_threads == 1 || nr_buf_consumers = 1)
+	    need_consumer_locking = false;
+	else
+	    need_consumer_locking = true;
+
+	buf_pools = new LFRing<unsigned char*>[nr_threads];
+	buf_consumer_locks = new uint32_t[nr_threads];
+	if (buf_pools && buf_consumer_locks)
+	{
+	    for (int i=0; i<nr_threads; i++)
+	    {
+		if (!buf_pools[i].reserve(NM_BUF_SLOTS)) {
+		    errh->fatal("NetmapInfo buf pool %d failt to reserve space",
+				i);
+		    return -1;
+		}
+		buf_consumer_locks[i] = 0;
+	    }
+	} else {
+	    errh->fatal("Out of memory for NetmapInfo buf pools");
+	    return -1;
+	}
+	
+    }
+
+    initialized = true;
+    return 0;
+}
 
 int
 NetmapInfo::ring::__open(const String &ifname, int ringid,
