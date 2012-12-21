@@ -7,6 +7,7 @@
 #include <click/packet.hh>
 #include <click/error.hh>
 #include <click/sync.hh>
+#include <g4c.h>
 #include <click/ring.hh>
 #include <click/glue.hh>
 #include <map>

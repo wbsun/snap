@@ -15,6 +15,7 @@
 #include <click/userutils.hh>
 #include <unistd.h>
 #include <fcntl.h>
+#include <click/master.hh>
 
 # include <sys/socket.h>
 # include <net/if.h>
@@ -35,7 +36,7 @@ CLICK_DECLS
 FromNMDevice::FromNMDevice()
     :
       _task(this),
-      _datalink(-1), _count(0), _promisc(0), _snaplen(0)
+      _count(0), _promisc(0), _snaplen(0)
 {
     _fd = -1;
     _ringid = -1;
@@ -107,7 +108,6 @@ FromNMDevice::initialize(ErrorHandler *errh)
     else
 	_fd = _netmap.open(_ifname, true, errh);
     if (_fd >= 0) {
-	_datalink = FAKE_DLT_EN10MB;
 	_netmap.initialize_rings_rx(0);//_timestamp);
     }
 

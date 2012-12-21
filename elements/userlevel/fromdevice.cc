@@ -61,6 +61,7 @@
 
 #if FROMDEVICE_ALLOW_NETMAP
 # include <sys/mman.h>
+#include <click/master.hh>
 #endif
 
 CLICK_DECLS
@@ -165,9 +166,9 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	return errh->error("bad METHOD");
 
 #if FROMDEVICE_ALLOW_NETMAP
-    if (_method == method_deafult || _method = method_netmap) {
+    if (_method == method_default || _method == method_netmap) {
 	NetmapInfo::register_buf_consumer();
-	NetmapInfo::set_dev_dirs(_ifname.c_str(), NetmapInfo::dev_rx);
+	NetmapInfo::set_dev_dir(_ifname.c_str(), NetmapInfo::dev_rx);
     }
 #endif
 

@@ -9,6 +9,7 @@
 #include <click/straccum.hh>
 #include <stdio.h>
 #include <unistd.h>
+#include <click/master.hh>
 
 # include <sys/socket.h>
 # include <sys/ioctl.h>
@@ -55,7 +56,7 @@ ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     if (_burst <= 0)
 	return errh->error("bad BURST");
 
-    NetmapInfo::set_dev_dirs(_ifname.c_str(), NetmapInfo::dev_tx);
+    NetmapInfo::set_dev_dir(_ifname.c_str(), NetmapInfo::dev_tx);
     return 0;
 }
 

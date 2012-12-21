@@ -52,7 +52,7 @@ NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
     if (!initialized) {
 	nr_threads = nthreads;
 
-	if (nr_threads == 1 || nr_buf_consumers = 1)
+	if (nr_threads == 1 || nr_buf_consumers == 1)
 	    need_consumer_locking = false;
 	else
 	    need_consumer_locking = true;

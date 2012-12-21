@@ -1,5 +1,5 @@
-#ifndef CLICK_TODEVICE_USERLEVEL_HH
-#define CLICK_TODEVICE_USERLEVEL_HH
+#ifndef CLICK_TONMDEVICE_HH
+#define CLICK_TONMDEVICE_HH
 #include <click/element.hh>
 #include <click/string.hh>
 #include <click/task.hh>
@@ -14,17 +14,12 @@ class ToNMDevice : public Element { public:
     ToNMDevice();
     ~ToNMDevice();
 
-    const char *class_name() const
-	{ return "ToNMDevice"; }
-    const char *port_count() const
-	{ return "1/0-2"; }
-    const char *processing() const
-	{ return "l/h"; }
-    const char *flags() const
-	{ return "S2"; }
+    const char *class_name() const	{ return "ToNMDevice"; }
+    const char *port_count() const	{ return "1/0-2"; }
+    const char *processing() const	{ return "l/h"; }
+    const char *flags() const	{ return "S2"; }
 
-    int configure_phase() const
-	{ return KernelFilter::CONFIGURE_PHASE_TODEVICE; }
+    int configure_phase() const 	{ return KernelFilter::CONFIGURE_PHASE_TODEVICE; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);

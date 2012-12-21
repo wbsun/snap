@@ -56,6 +56,7 @@
 #endif
 #if TODEVICE_ALLOW_NETMAP
 # include <sys/mman.h>
+# include <click/master.hh>
 #endif
 
 CLICK_DECLS
@@ -134,8 +135,8 @@ ToDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	return errh->error("bad METHOD");
 
 #if FROMDEVICE_ALLOW_NETMAP
-    if (_method == method_deafult || _method = method_netmap) {
-	NetmapInfo::set_dev_dirs(_ifname.c_str(), NetmapInfo::dev_tx);
+    if (_method == method_default || _method == method_netmap) {
+	NetmapInfo::set_dev_dir(_ifname.c_str(), NetmapInfo::dev_tx);
     }
 #endif
    
