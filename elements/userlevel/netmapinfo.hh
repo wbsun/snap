@@ -9,6 +9,10 @@
 #include <click/sync.hh>
 #include <click/ring.hh>
 #include <click/glue.hh>
+#include <map>
+#include <string>
+using namespace std;
+
 CLICK_DECLS
 
 #ifndef NM_BUF_SLOTS
@@ -23,12 +27,11 @@ public:
 	unsigned ring_end;
 	struct netmap_if *nifp;
 	struct nmreq req;
-	bool rx, tx;
+	uint32_t dirs;
 	bool per_ring;
 
 	ring() {
-	    rx = false;
-	    tx = false;
+	    dirs = 0;
 	    per_ring = false;
 	}
 
@@ -45,14 +48,27 @@ public:
 		   bool always_error, ErrorHandler *errh);
     };
 
-    static unsigned char *buffers;	// XXX not thread safe
-
     static LFRing<unsigned char*> *buf_pools;
-    static uint32_t *buf_consumer_locks;
+    static volatile uint32_t *buf_consumer_locks;
+    static volatile uint32_t exception_buf_pool_lock;
     static int nr_buf_consumers;
     static int nr_threads;
     static bool initialized;
     static bool need_consumer_locking;
+
+    enum { dev_rx = 0x1, dev_tx = 0x2 };
+
+    static map<string, uint32_t> dev_dirs;
+
+    static void set_dev_dir(const char *dev, uint32_t dirs) {
+	map<string, uint32_t >::iterator ite = dev_dirs.find(string(dev));
+	if (ite == dev_dirs.end()) {
+	    dev_dirs[string(dev)] = 0;
+	    ite = dev_dirs.find(string(dev));
+	}
+
+	ite->second |= dirs;
+    }
 
     static void register_buf_consumer() {
 	nr_buf_consumers++;
@@ -64,19 +80,50 @@ public:
 	return p->buffer_destructor() == buffer_destructor;
     }
     static void buffer_destructor(unsigned char *buf, size_t) {
-	*reinterpret_cast<unsigned char **>(buf) = buffers;
-	buffers = buf;
+	int tid = click_current_thread_id;
+	LFRing<unsigned char*>* pool = buf_pools+tid;
+
+	if (unlikely(tid >= nr_threads)) {
+	    click_chatter("Bad thread id %d catched at buffer dtor\n", tid);
+	    pool = buf_pools + nr_threads;
+	    if (nr_threads > 1)
+		while (atomic_uint32_t::swap(exception_buf_pool_lock, 1) == 1);
+	}
+
+	if (unlikely(!pool->add_new(buf))) {
+	    click_chatter("NetmapInfo buffer pool full! Can't handle this, should abort!");
+	}
+
+	if (unlikely(tid >= nr_threads) && nr_threads > 1) {
+	    click_compiler_fence();
+	    exception_buf_pool_lock = 0;
+	}	
     }
-    static bool refill(struct netmap_ring *ring) {
+    static bool refill(struct netmap_ring *ring, bool multiple=true) {
 	bool rt = false;
-	if (buffers) {
-	    unsigned char *buf = buffers;
-	    buffers = *reinterpret_cast<unsigned char **>(buffers);
-	    unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
-	    ring->slot[res1idx].buf_idx = NETMAP_BUF_IDX(ring, (char *) buf);
-	    ring->slot[res1idx].flags |= NS_BUF_CHANGED;
-	    --ring->reserved;
-	    rt = true;
+
+	for (int i=0; i<=nr_threads && ring->reserved > 0; ++i) {
+	    if (need_consumer_locking) {
+		while(atomic_uint32_t::swap(buf_consumer_locks[i], 1) == 1);
+	    }
+	    while (!buf_pools[i].empty() && ring->reserved > 0) {
+		unsigned char *buf = buf_pools[i].oldest();
+		buf_pools[i].remove_oldest();
+		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
+		ring->slot[res1idx].buf_idx = NETMAP_BUF_IDX(ring, (char *) buf);
+		ring->slot[res1idx].flags |= NS_BUF_CHANGED;
+		--ring->reserved;
+		if (unlikely(!rt))
+		    rt = true;
+
+		// ignore single case
+//		else if (unlikely(!multiple))
+//		    goto unlock_and_out;
+	    }
+	    if (need_consumer_locking) {
+		click_compiler_fence();
+		buf_consumer_locks[i] = 0;
+	    }
 	}
 	return rt;
     }

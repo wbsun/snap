@@ -133,6 +133,12 @@ ToDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     else
 	return errh->error("bad METHOD");
 
+#if FROMDEVICE_ALLOW_NETMAP
+    if (_method == method_deafult || _method = method_netmap) {
+	NetmapInfo::set_dev_dirs(_ifname.c_str(), NetmapInfo::dev_tx);
+    }
+#endif
+   
     return 0;
 }
 
@@ -179,6 +185,7 @@ ToDevice::initialize(ErrorHandler *errh)
 	    _fd = fd->fd();
 	    _netmap = *fd->netmap();
 	} else {
+	    NetmapInfo::initialize(master()->nthreads(), errh);
 	    if (_ringid >= 0)
 		_fd = _netmap.open_ring(_ifname, _ringid,
 					_method == method_netmap, errh);

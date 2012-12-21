@@ -164,6 +164,13 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     else
 	return errh->error("bad METHOD");
 
+#if FROMDEVICE_ALLOW_NETMAP
+    if (_method == method_deafult || _method = method_netmap) {
+	NetmapInfo::register_buf_consumer();
+	NetmapInfo::set_dev_dirs(_ifname.c_str(), NetmapInfo::dev_rx);
+    }
+#endif
+
     if (bpf_filter && _method != method_pcap)
 	errh->warning("not using METHOD PCAP, BPF filter ignored");
 
@@ -297,6 +304,8 @@ FromDevice::initialize(ErrorHandler *errh)
 
 #if FROMDEVICE_ALLOW_NETMAP
     if (_method == method_default || _method == method_netmap) {
+	NetmapInfo::initialize(master()->nthreads(), errh);
+	
 	if (_ringid >= 0)
 	    _fd = _netmap.open_ring(_ifname, _ringid, _method == method_netmap, errh);
 	else

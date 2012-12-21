@@ -83,7 +83,8 @@ public:
 	    delete[] _ring;
     }
 
-    inline int size() const { return _head > _tail? _head-_tail:_capacity+1+_head-_tail; }
+    inline int size() const {
+	return _head > _tail? _head-_tail:_capacity+1+_head-_tail; }
     inline int capacity() const { return _capacity; }
     bool reserve(int sz);
     inline void clear() { _head = _tail = 0; }
@@ -129,13 +130,11 @@ LFRing<T>::reserve(int sz)
 template <typename T> bool
 LFRing<T>::add_new(T& v)
 {
-    assert(_ring);
+//     assert(_ring);
     if ((_head+1)%(_capacity+1) == _tail)
 	return false;
     _ring[_head] = v;
-    asm volatile (
-	""::"m"(_ring[_head]),"m"(_head)
-	);
+//     asm volatile (""::"m"(_ring[_head]),"m"(_head));
     g4c_to_volatile(_head) = (_head+1)%(_capacity+1);
     return true;	
 }
@@ -143,7 +142,7 @@ LFRing<T>::add_new(T& v)
 template <typename T> void
 LFRing<T>::remove_oldest()
 {
-    assert(_ring && _head!=_tail);
+//     assert(_ring && _head!=_tail);
     g4c_to_volatile(_tail) = (_tail+1)%(_capacity+1);
 }
 

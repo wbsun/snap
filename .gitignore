@@ -17,3 +17,5 @@ installch
 man
 stamp-egroup
 stamp-h
+
+cscope.*

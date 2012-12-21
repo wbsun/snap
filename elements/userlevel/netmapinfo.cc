@@ -33,9 +33,13 @@ static size_t netmap_memory_size;
 static uint32_t netmap_memory_users;
 
 LFRing<unsigned char*> *NetmapInfo::buf_pools;
-uint32_t *NetmapInfo::buf_consumer_locks;
-int NetmapInfo::nr_threads;
+volatile uint32_t *NetmapInfo::buf_consumer_locks;
+volatile uint32_t NetmapInfo::exception_buf_pool_lock;
+int NetmapInfo::nr_threads = 0;
+int NetmapInfo::nr_buf_consumers = 0;
 bool NetmapInfo::initialized = false;
+bool NetmapInfo::need_consumer_locking;
+map<string, uint32_t> NetmapInfo::dev_dirs;
 
 int
 NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
@@ -53,15 +57,17 @@ NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 	else
 	    need_consumer_locking = true;
 
-	buf_pools = new LFRing<unsigned char*>[nr_threads];
-	buf_consumer_locks = new uint32_t[nr_threads];
+	buf_pools = new LFRing<unsigned char*>[nr_threads+1];
+	buf_consumer_locks = new uint32_t[nr_threads+1];
+	exception_buf_pool_lock = 0;
 	if (buf_pools && buf_consumer_locks)
 	{
-	    for (int i=0; i<nr_threads; i++)
+	    for (int i=0; i<nr_threads+1; i++)
 	    {
 		if (!buf_pools[i].reserve(NM_BUF_SLOTS)) {
-		    errh->fatal("NetmapInfo buf pool %d failt to reserve space",
-				i);
+		    errh->fatal(
+			"NetmapInfo buf pool %d failt to reserve space",
+			i);
 		    return -1;
 		}
 		buf_consumer_locks[i] = 0;
@@ -69,8 +75,7 @@ NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 	} else {
 	    errh->fatal("Out of memory for NetmapInfo buf pools");
 	    return -1;
-	}
-	
+	}	
     }
 
     initialized = true;
@@ -81,18 +86,24 @@ int
 NetmapInfo::ring::__open(const String &ifname, int ringid,
 			 bool always_error, ErrorHandler *errh)
 {
-    ErrorHandler *initial_errh = always_error ? errh : ErrorHandler::silent_handler();
+    if (!NetmapInfo::initialized) {
+	errh->warning("NetmapInfo not initialized before calling ring::open!");
+	NetmapInfo::initialize(2, errh);
+    }
+    
+    ErrorHandler *initial_errh = always_error ?
+	errh : ErrorHandler::silent_handler();
 
     int fd = ::open("/dev/netmap", O_RDWR);
     if (fd < 0) {
 	if (ringid < 0)
 	    initial_errh->error("/dev/netmap: %s", strerror(errno));
 	else
-	    initial_errh->error("/dev/netmap@%d: %s", ringid, strerror(errno));
+	    initial_errh->error("/dev/netmap@%d: %s",
+				ringid, strerror(errno));
 	return -1;
     }
 
-//     struct nmreq req;
     memset(&req, 0, sizeof(req));
     strncpy(req.nr_name, ifname.c_str(), sizeof(req.nr_name));
 #if NETMAP_API
@@ -100,15 +111,18 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 #endif
     int r;
     if ((r = ioctl(fd, NIOCGINFO, &req))) {
-	initial_errh->error("netmap %s: %s", ifname.c_str(), strerror(errno));
+	initial_errh->error("netmap %s: %s",
+			    ifname.c_str(), strerror(errno));
     error:
 	close(fd);
 	return -1;
     }
 
-    if (ringid >= req.nr_rx_rings) {
-	initial_errh->error("netmap: requested ringid %d larger/equal than "
-			    "max ring number %u.", ringid, req.nr_rx_rings);
+    if (ringid >= req.nr_rx_rings || ringid >= req.nr_tx_rings) {
+	initial_errh->error(
+	    "netmap: requested ringid %d larger/equal than "
+	    "max ring number rx %u. tx %u",
+	    ringid, req.nr_rx_rings, req.nr_tx_rings);
 	goto error;
     }
     
@@ -120,7 +134,8 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 	netmap_memory = mmap(0, netmap_memory_size, PROT_WRITE | PROT_READ,
 			     MAP_SHARED, fd, 0);
 	if (netmap_memory == MAP_FAILED) {
-	    errh->error("netmap allocate %s: %s", ifname.c_str(), strerror(errno));
+	    errh->error("netmap allocate %s: %s",
+			ifname.c_str(), strerror(errno));
 	    netmap_memory_lock.release();
 	    goto error;
 	}
@@ -137,13 +152,32 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
     else
 	req.nr_ringid = ((uint16_t) ringid) | NETMAP_HW_RING;
 
+    map<string, uint32_t>::iterator ite =
+	NetmapInfo::dev_dirs.find(string(ifname.c_str()));
+    if (ite == NetmapInfo::dev_dirs.end() ||
+	! (ite->second & NetmapInfo::dev_tx)) {
+	req.nr_ringid |= NETMAP_NO_TX_POLL;
+	dirs = NetmapInfo::dev_rx;
+    } else
+	dirs = NetmapInfo::dev_rx | NetmapInfo::dev_tx;
+
     if ((r = ioctl(fd, NIOCREGIF, &req))) {
-	errh->error("netmap register %s: %s", ifname.c_str(), strerror(errno));
+	errh->error("netmap register %s: %s",
+		    ifname.c_str(), strerror(errno));
 	goto error;
     }
 
 
     nifp = NETMAP_IF(mem, req.nr_offset);
+
+    if (ringid < 0)
+	per_ring = false;
+    else {
+	per_ring = true;
+	ring_begin = ringid;
+	ring_end = ringid+1;
+    }
+		      
     return fd;
 }
 
@@ -164,9 +198,12 @@ NetmapInfo::ring::open_ring(const String &ifname, int ringid,
 void
 NetmapInfo::ring::initialize_rings_rx(int timestamp)
 {
-    ring_begin = 0;
-    // 0 means "same count as the converse direction"
-    ring_end = nifp->ni_rx_rings ? nifp->ni_rx_rings : nifp->ni_tx_rings;
+    if (!per_ring) {
+	ring_begin = 0;
+	ring_end = nifp->ni_rx_rings ?
+	    nifp->ni_rx_rings : nifp->ni_tx_rings;
+    }
+    
     if (timestamp >= 0) {
 	int flags = (timestamp > 0 ? NR_TIMESTAMP : 0);
 	for (unsigned i = ring_begin; i != ring_end; ++i)
@@ -177,8 +214,11 @@ NetmapInfo::ring::initialize_rings_rx(int timestamp)
 void
 NetmapInfo::ring::initialize_rings_tx()
 {
-    ring_begin = 0;
-    ring_end = nifp->ni_tx_rings ? nifp->ni_tx_rings : nifp->ni_rx_rings;
+    if (!per_ring) {
+	ring_begin = 0;
+	ring_end = nifp->ni_tx_rings ?
+	    nifp->ni_tx_rings : nifp->ni_rx_rings;
+    }
 }
 
 void

@@ -5,32 +5,37 @@
 #include <click/task.hh>
 #include <click/timer.hh>
 #include <click/notifier.hh>
-#include "elements/local/nmfromdevice.hh"
+#include "elements/local/fromnmdevice.hh"
 CLICK_DECLS
 
-#define TODEVICE_ALLOW_LINUX 1
-#define TODEVICE_ALLOW_NETMAP 1
 
+class ToNMDevice : public Element { public:
 
-class NMToDevice : public Element { public:
+    ToNMDevice();
+    ~ToNMDevice();
 
-    NMToDevice();
-    ~NMToDevice();
+    const char *class_name() const
+	{ return "ToNMDevice"; }
+    const char *port_count() const
+	{ return "1/0-2"; }
+    const char *processing() const
+	{ return "l/h"; }
+    const char *flags() const
+	{ return "S2"; }
 
-    const char *class_name() const		{ return "NMToDevice"; }
-    const char *port_count() const		{ return "1/0-2"; }
-    const char *processing() const		{ return "l/h"; }
-    const char *flags() const			{ return "S2"; }
-
-    int configure_phase() const { return KernelFilter::CONFIGURE_PHASE_TODEVICE; }
+    int configure_phase() const
+	{ return KernelFilter::CONFIGURE_PHASE_TODEVICE; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
     void add_handlers();
 
-    String ifname() const			{ return _ifname; }
-    int fd() const				{ return _fd; }
-    inline int dev_ringid() { return _ringid; }
+    String ifname() const
+	{ return _ifname; }
+    int fd() const
+	{ return _fd; }
+    inline int dev_ringid()
+	{ return _ringid; }
     bool run_task(Task *);
     void selected(int fd, int mask);
 
@@ -55,9 +60,10 @@ class NMToDevice : public Element { public:
     int _pulls;
 
     enum { h_debug, h_signal, h_pulls, h_q };
-    NMFromDevice *find_nmfromdevice() const;
+    FromNMDevice *find_fromnmdevice() const;
     int send_packet(Packet *p);
-    static int write_param(const String &in_s, Element *e, void *vparam, ErrorHandler *errh);
+    static int write_param(
+	const String &in_s, Element *e, void *vparam, ErrorHandler *errh);
     static String read_param(Element *e, void *thunk);
 
 };

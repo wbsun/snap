@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 # include <sys/ioctl.h>
-#include "nmfromdevice.hh"
+#include "fromnmdevice.hh"
 #include <click/etheraddress.hh>
 #include <click/error.hh>
 #include <click/straccum.hh>
@@ -15,7 +15,6 @@
 #include <click/userutils.hh>
 #include <unistd.h>
 #include <fcntl.h>
-#include "fakepcap.hh"
 
 # include <sys/socket.h>
 # include <net/if.h>
@@ -33,23 +32,26 @@
 
 CLICK_DECLS
 
-NMFromDevice::NMFromDevice()
+FromNMDevice::FromNMDevice()
     :
       _task(this),
       _datalink(-1), _count(0), _promisc(0), _snaplen(0)
 {
     _fd = -1;
     _ringid = -1;
+    _test = false;
 }
 
-NMFromDevice::~NMFromDevice()
+FromNMDevice::~FromNMDevice()
 {
 }
 
 int
-NMFromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
+FromNMDevice::configure(Vector<String> &conf,
+			ErrorHandler *errh)
 {
-    bool promisc = false, outbound = false, sniffer = true, timestamp = true;
+    bool promisc = false, outbound = false,
+	sniffer = true, timestamp = false;
     _snaplen = default_snaplen;
     _headroom = Packet::default_headroom;
     _headroom += (4 - (_headroom + 2) % 4) % 4; // default 4/2 alignment
@@ -70,6 +72,7 @@ NMFromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("BURST", _burst)
 	.read("TIMESTAMP", timestamp)
 	.read("RING", _ringid)
+	.read("TEST", _test)
 	.complete() < 0)
 	return -1;
     if (_snaplen > 8190 || _snaplen < 14)
@@ -79,27 +82,32 @@ NMFromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     if (_burst <= 0)
 	return errh->error("BURST out of range");
 
-    _method = method_netmap;
     _sniffer = sniffer;
     _promisc = promisc;
     _outbound = outbound;
     _timestamp = timestamp;
+
+    NetmapInfo::register_buf_consumer();
+    NetmapInfo::set_dev_dir(_ifname.c_str(),
+			    NetmapInfo::dev_rx);
+    
     return 0;
 }
 
 int
-NMFromDevice::initialize(ErrorHandler *errh)
+FromNMDevice::initialize(ErrorHandler *errh)
 {
     if (!_ifname)
 	return errh->error("interface not set");
 
+    NetmapInfo::initialize(master()->nthreads(), errh);
+
     if (_ringid >= 0)
-	_fd = _netmap.open_ring(_ifname, _ringid, _method == method_netmap, errh);
+	_fd = _netmap.open_ring(_ifname, _ringid, true, errh);
     else
-	_fd = _netmap.open(_ifname, _method == method_netmap, errh);
+	_fd = _netmap.open(_ifname, true, errh);
     if (_fd >= 0) {
 	_datalink = FAKE_DLT_EN10MB;
-	_method = method_netmap;
 	_netmap.initialize_rings_rx(0);//_timestamp);
     }
 
@@ -116,17 +124,20 @@ NMFromDevice::initialize(ErrorHandler *errh)
 
 #include <stdio.h>
 void
-NMFromDevice::cleanup(CleanupStage stage)
+FromNMDevice::cleanup(CleanupStage stage)
 {
     if (stage >= CLEANUP_INITIALIZED && !_sniffer)
-	KernelFilter::device_filter(_ifname, false, ErrorHandler::default_handler());
-    if (_fd >= 0 && _method == method_netmap)
+	KernelFilter::device_filter(
+	    _ifname, false, ErrorHandler::default_handler());
+    if (_fd >= 0)
 	    _netmap.close(_fd);
     _fd = -1;
 }
 
 void
-NMFromDevice::emit_packet(WritablePacket *p, int extra_len, const Timestamp &ts)
+FromNMDevice::emit_packet(WritablePacket *p,
+			  int extra_len,
+			  const Timestamp &ts)
 {
 #if 0
     // set packet type annotation
@@ -151,35 +162,39 @@ NMFromDevice::emit_packet(WritablePacket *p, int extra_len, const Timestamp &ts)
 }
 
 int
-NMFromDevice::netmap_dispatch()
+FromNMDevice::netmap_dispatch()
 {
     int n = 0;
-    for (unsigned ri = _netmap.ring_begin; ri != _netmap.ring_end; ++ri) {
+    for (unsigned ri = _netmap.ring_begin;
+	 ri != _netmap.ring_end; ++ri) {
 	struct netmap_ring *ring = NETMAP_RXRING(_netmap.nifp, ri);
-	//click_chatter("netmap dispatch %s %u %u %u %u", _ifname.c_str(), ri, ring->cur, ring->reserved, ring->avail);
 
-	while (ring->reserved > 0 && NetmapInfo::refill(ring))
-	    /* click_chatter("Refilled") */;
+	NetmapInfo::refill(ring);
 
-	click_chatter("netmap ring %u slots, av %u, rings %u",
-		      ring->num_slots, ring->avail,
-		      _netmap.ring_end - _netmap.ring_begin);
+	if (_test)
+	    click_chatter("netmap ring %u slots, av %u, rings %u",
+			  ring->num_slots, ring->avail,
+			  _netmap.ring_end - _netmap.ring_begin);
 
 	if (ring->avail == 0)
 	    continue;
 
 	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 
-	while (n != _burst && ring->avail > 0) {
+	while (/*n != _burst &&*/
+	       ring->avail > 0) {
 	    unsigned cur = ring->cur;
 	    unsigned buf_idx = ring->slot[cur].buf_idx;
 	    if (buf_idx < 2)
 		break;
-	    unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
+	    unsigned char *buf =
+		(unsigned char *) NETMAP_BUF(ring, buf_idx);
 
 	    WritablePacket *p;
 	    if (nzcopy > 0) {
-		p = Packet::make(buf, ring->slot[cur].len, NetmapInfo::buffer_destructor);
+		p = Packet::make(buf,
+				 ring->slot[cur].len,
+				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
 		--nzcopy;
 	    } else {
@@ -198,7 +213,7 @@ NMFromDevice::netmap_dispatch()
 }
 
 void
-NMFromDevice::selected(int fd, int mask)
+FromNMDevice::selected(int fd, int mask)
 {
     if (! (mask & Element::SELECT_READ))
 	return;
@@ -210,7 +225,7 @@ NMFromDevice::selected(int fd, int mask)
 }
 
 bool
-NMFromDevice::run_task(Task *)
+FromNMDevice::run_task(Task *)
 {
     // Read and push() at most one burst of packets.
     int r = 0;
@@ -223,49 +238,31 @@ NMFromDevice::run_task(Task *)
 	return false;
 }
 
-void
-NMFromDevice::kernel_drops(bool& known, int& max_drops) const
-{
-    known = false, max_drops = -1;
-}
-
 String
-NMFromDevice::read_handler(Element* e, void *thunk)
+FromNMDevice::read_handler(Element* e, void *thunk)
 {
-    NMFromDevice* fd = static_cast<NMFromDevice*>(e);
-    if (thunk == (void *) 0) {
-	int max_drops;
-	bool known;
-	fd->kernel_drops(known, max_drops);
-	if (known)
-	    return String(max_drops);
-	else if (max_drops >= 0)
-	    return "<" + String(max_drops);
-	else
-	    return "??";
-    } else if (thunk == (void *) 1)
-	return String(fake_pcap_unparse_dlt(fd->_datalink));
-    else
-	return String(fd->_count);
+    FromNMDevice* fd = static_cast<FromNMDevice*>(e);
+    return String(fd->_count);
 }
 
 int
-NMFromDevice::write_handler(const String &, Element *e, void *, ErrorHandler *)
+FromNMDevice::write_handler(
+    const String &, Element *e, void *, ErrorHandler *)
 {
-    NMFromDevice* fd = static_cast<NMFromDevice*>(e);
+    FromNMDevice* fd = static_cast<FromNMDevice*>(e);
     fd->_count = 0;
     return 0;
 }
 
 void
-NMFromDevice::add_handlers()
+FromNMDevice::add_handlers()
 {
-    add_read_handler("kernel_drops", read_handler, 0);
-    add_read_handler("encap", read_handler, 1);
-    add_read_handler("count", read_handler, 2);
-    add_write_handler("reset_counts", write_handler, 0, Handler::BUTTON);
+    add_read_handler("count", read_handler, 0);
+    add_write_handler("reset_counts",
+		      write_handler,
+		      0, Handler::BUTTON);
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(userlevel FakePcap KernelFilter NetmapInfo)
-EXPORT_ELEMENT(NMFromDevice)
+ELEMENT_REQUIRES(userlevel KernelFilter NetmapInfo)
+EXPORT_ELEMENT(FromNMDevice)

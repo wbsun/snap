@@ -1,5 +1,5 @@
 #include <click/config.h>
-#include "nmtodevice.hh"
+#include "tonmdevice.hh"
 #include <click/error.hh>
 #include <click/etheraddress.hh>
 #include <click/args.hh>
@@ -26,7 +26,7 @@
 
 CLICK_DECLS
 
-NMToDevice::NMToDevice()
+ToNMDevice::ToNMDevice()
     : _task(this), _timer(&_task), _q(0), _pulls(0)
 {
     _fd = -1;
@@ -34,12 +34,12 @@ NMToDevice::NMToDevice()
     _ringid = -1;
 }
 
-NMToDevice::~NMToDevice()
+ToNMDevice::~ToNMDevice()
 {
 }
 
 int
-NMToDevice::configure(Vector<String> &conf, ErrorHandler *errh)
+ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     _burst = 1;
     _ringid = -1;
@@ -55,15 +55,17 @@ NMToDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     if (_burst <= 0)
 	return errh->error("bad BURST");
 
+    NetmapInfo::set_dev_dirs(_ifname.c_str(), NetmapInfo::dev_tx);
     return 0;
 }
 
-NMFromDevice *
-NMToDevice::find_nmfromdevice() const
+FromNMDevice *
+ToNMDevice::find_fromnmdevice() const
 {
     Router *r = router();
     for (int ei = 0; ei < r->nelements(); ++ei) {
-	NMFromDevice *fd = (NMFromDevice *) r->element(ei)->cast("NMFromDevice");
+	FromNMDevice *fd =
+	    (FromNMDevice *) r->element(ei)->cast("FromNMDevice");
 	if (fd && fd->ifname() == _ifname
 	    && fd->dev_ringid() == _ringid
 	    && fd->fd() >= 0)
@@ -73,20 +75,21 @@ NMToDevice::find_nmfromdevice() const
 }
 
 int
-NMToDevice::initialize(ErrorHandler *errh)
+ToNMDevice::initialize(ErrorHandler *errh)
 {
     _timer.initialize(this);
 
-    FromDevice *fd = find_fromdevice();
+    FromNMDevice *fd = find_fromnmdevice();
     if (fd && fd->netmap()) {
 	_fd = fd->fd();
 	_netmap = *fd->netmap();
     } else {
+	NetmapInfo::initialize(master()->nthreads(), errh);
 	if (_ringid >= 0)
 	    _fd = _netmap.open_ring(_ifname, _ringid,
-				    1, errh);
+				    true, errh);
 	else
-	    _fd = _netmap.open(_ifname, 1, errh);
+	    _fd = _netmap.open(_ifname, true, errh);
 	if (_fd >= 0) {
 	    _my_fd = true;
 	    add_select(_fd, SELECT_READ); // NB NOT writable!
@@ -109,7 +112,7 @@ NMToDevice::initialize(ErrorHandler *errh)
 }
 
 void
-NMToDevice::cleanup(CleanupStage)
+ToNMDevice::cleanup(CleanupStage)
 {
     if (_fd >= 0 && _my_fd) {
 	_netmap.close(_fd);
@@ -119,7 +122,7 @@ NMToDevice::cleanup(CleanupStage)
 
 
 int
-NMToDevice::netmap_send_packet(Packet *p)
+ToNMDevice::netmap_send_packet(Packet *p)
 {
     for (unsigned ri = _netmap.ring_begin; ri != _netmap.ring_end; ++ri) {
 	struct netmap_ring *ring = NETMAP_TXRING(_netmap.nifp, ri);
@@ -132,7 +135,7 @@ NMToDevice::netmap_send_packet(Packet *p)
 	unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
 	uint32_t p_length = p->length();
 	if (NetmapInfo::is_netmap_buffer(p)
-	    && !p->shared() && p->buffer() == p->data()
+	    && !p->shared() /* A little risk: && p->buffer() == p->data() */
 	    && noutputs() == 0) {
 	    ring->slot[cur].buf_idx = NETMAP_BUF_IDX(ring, (char *) p->buffer());
 	    ring->slot[cur].flags |= NS_BUF_CHANGED;
@@ -141,6 +144,8 @@ NMToDevice::netmap_send_packet(Packet *p)
 	} else
 	    memcpy(buf, p->data(), p_length);
 	ring->slot[cur].len = p_length;
+
+	// need this?
 	__asm__ volatile("" : : : "memory");
 	ring->cur = NETMAP_RING_NEXT(ring, cur);
 	ring->avail--;
@@ -161,7 +166,7 @@ NMToDevice::netmap_send_packet(Packet *p)
  * --jbicket
  */
 int
-NMToDevice::send_packet(Packet *p)
+ToNMDevice::send_packet(Packet *p)
 {
     int r = 0;
     errno = 0;
@@ -175,7 +180,7 @@ NMToDevice::send_packet(Packet *p)
 }
 
 bool
-NMToDevice::run_task(Task *)
+ToNMDevice::run_task(Task *)
 {
     Packet *p = _q;
     _q = 0;
@@ -214,7 +219,7 @@ NMToDevice::run_task(Task *)
 	}
 	return count > 0;
     } else if (r < 0) {
-	click_chatter("NMToDevice(%s): %s", _ifname.c_str(), strerror(-r));
+	click_chatter("ToNMDevice(%s): %s", _ifname.c_str(), strerror(-r));
 	checked_output_push(1, p);
     }
 
@@ -224,7 +229,7 @@ NMToDevice::run_task(Task *)
 }
 
 void
-NMToDevice::selected(int, int)
+ToNMDevice::selected(int, int)
 {
     _task.reschedule();
     remove_select(_fd, SELECT_WRITE);
@@ -232,9 +237,9 @@ NMToDevice::selected(int, int)
 
 
 String
-NMToDevice::read_param(Element *e, void *thunk)
+ToNMDevice::read_param(Element *e, void *thunk)
 {
-    NMToDevice *td = (NMToDevice *)e;
+    ToNMDevice *td = (ToNMDevice *)e;
     switch((uintptr_t) thunk) {
     case h_debug:
 	return String(td->_debug);
@@ -250,10 +255,10 @@ NMToDevice::read_param(Element *e, void *thunk)
 }
 
 int
-NMToDevice::write_param(const String &in_s, Element *e, void *vparam,
+ToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
 		     ErrorHandler *errh)
 {
-    NMToDevice *td = (NMToDevice *)e;
+    ToNMDevice *td = (ToNMDevice *)e;
     String s = cp_uncomment(in_s);
     switch ((intptr_t)vparam) {
     case h_debug: {
@@ -268,7 +273,7 @@ NMToDevice::write_param(const String &in_s, Element *e, void *vparam,
 }
 
 void
-NMToDevice::add_handlers()
+ToNMDevice::add_handlers()
 {
     add_task_handlers(&_task);
     add_read_handler("debug", read_param, h_debug, Handler::CHECKBOX);
@@ -279,5 +284,5 @@ NMToDevice::add_handlers()
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(NMFromDevice userlevel)
-EXPORT_ELEMENT(NMToDevice)
+ELEMENT_REQUIRES(FromNMDevice userlevel)
+EXPORT_ELEMENT(ToNMDevice)
