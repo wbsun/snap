@@ -63,88 +63,91 @@ public:
 };
 
 
-/**
- * Single producer, single consumer.
- * Capacity never reached.
- * Producer just add_new().
- * Consumer just !empty(), oldest() and remove_oldest().
- */
-template <typename T>
+template <class T>
 class LFRing {
-private:
-    T *_ring;
-    int _head, _tail;
-    int _capacity;
-
 public:
-    LFRing() : _ring(0), _head(0), _tail(0), _capacity(0) {}
+    T* data;
+    int pad1[0];
+    
+    int head;
+    int pad2[0];
+    
+    int tail;
+    int pad3[0];
+    
+    unsigned int cpo; // capacity plus one
+    unsigned int mask;
+
+    LFRing() : data(0), head(0),
+		   tail(0), cpo(0), mask(0)
+	{}
+
+    LFRing(unsigned int cap_plus_one) {
+	reserve(cap_plus_one);
+    }
+
     ~LFRing() {
-	if (_ring)
-	    delete[] _ring;
+	if (data)
+	    delete[] data;
     }
 
-    inline int size() const {
-	return _head > _tail? _head-_tail:_capacity+1+_head-_tail; }
-    inline int capacity() const { return _capacity; }
-    bool reserve(int sz);
-    inline void clear() { _head = _tail = 0; }
-    bool empty() const { return _head == _tail; }
+    bool reserve(unsigned int cap_plus_one) {
+	if (__builtin_popcount(cap_plus_one>>1) != 1) {
+	    ErrorHandler::default_handler()->fatal(
+		"Capacity plus one %u not power of 2.",
+		cap_plus_one);
+	    return false;
+	}
 
-    inline T& at(int i) {
-	assert(_head!=_tail);
-	int pos = _tail + i;
-	return _ring[pos%(_capacity+1)];
+	cpo = cap_plus_one;
+	mask = cpo-1;
+
+	head = tail = 0;
+	if (data = new T[cpo])
+	    return true;
+	else
+	    return false;
     }
 
-    inline T& operator[](int i) {
-	return at(i);
+    inline unsigned int size() {
+	return (head-tail)&mask;
+    }
+    
+    inline unsigned int capacity() { return mask; }
+
+    inline void clear() { head = tail = 0; }
+
+    bool empty() { return head == tail; }
+
+    bool full() { return ((head-tail)&mask) == mask; }
+
+    T& oldest() { return data[tail]; }
+
+    void add_new(T& v) {
+	data[head] = v;
+	__asm__ volatile("": :"m" (data[head]), "m" (head));
+	head = (head+1)&mask;
+	__asm__ volatile(""::"m"(head));
     }
 
-    inline T& newest() {
-	return _ring[(_head+capacity)%(_capacity+1)];
-	// return _ring[(_head-1+_capacity+1)%(_capacity+1)];
+    void remove_oldest() {
+	tail = (tail+1)&mask;
+	__asm__ volatile(""::"m"(tail));	    
     }
 
-    inline T& oldest() {
-	return _ring[_tail];
+    void remove_olest_with_wmb() {
+	__asm__ volatile("": :"m" (data[tail]), "m" (tail));
+	remove_oldest();
     }
 
-    bool add_new(T& v);
-    void remove_oldest();
+    T& remove_and_get_oldest() {
+	T& v = data[tail];
+	__asm__ volatile("": :"m" (data[tail]), "m" (tail));
+	tail = (tail+1)&mask;
+	__asm__ volatile(""::"m" (tail));
+	return v;
+    }
 };
-
-template <typename T> bool
-LFRing<T>::reserve(int sz)
-{
-    assert(!_ring);
-    assert(sz > 0);
-
-    g4c_to_volatile(_ring) = (T*)CLICK_LALLOC(sizeof(T)*(sz+1));
-    if (_ring) {
-	g4c_to_volatile(_capacity) = sz;
-	return true;
-    } else
-	return false;		
-}
-
-template <typename T> bool
-LFRing<T>::add_new(T& v)
-{
-//     assert(_ring);
-    if ((_head+1)%(_capacity+1) == _tail)
-	return false;
-    _ring[_head] = v;
-//     asm volatile (""::"m"(_ring[_head]),"m"(_head));
-    g4c_to_volatile(_head) = (_head+1)%(_capacity+1);
-    return true;	
-}
-
-template <typename T> void
-LFRing<T>::remove_oldest()
-{
-//     assert(_ring && _head!=_tail);
-    g4c_to_volatile(_tail) = (_tail+1)%(_capacity+1);
-}
 
 CLICK_ENDDECLS
 

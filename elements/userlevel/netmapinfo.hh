@@ -17,7 +17,7 @@ using namespace std;
 CLICK_DECLS
 
 #ifndef NM_BUF_SLOTS
-#define NM_BUF_SLOTS 65536
+#define NM_BUF_SLOTS (1<<17)
 #endif
 
 class NetmapInfo {
@@ -91,9 +91,10 @@ public:
 		while (atomic_uint32_t::swap(exception_buf_pool_lock, 1) == 1);
 	}
 
-	if (unlikely(!pool->add_new(buf))) {
+	if (unlikely(pool->full())) {
 	    click_chatter("NetmapInfo buffer pool full! Can't handle this, should abort!");
-	}
+	} else
+	    pool->add_new(buf);
 
 	if (unlikely(tid >= nr_threads) && nr_threads > 1) {
 	    click_compiler_fence();
@@ -108,8 +109,7 @@ public:
 		while(atomic_uint32_t::swap(buf_consumer_locks[i], 1) == 1);
 	    }
 	    while (!buf_pools[i].empty() && ring->reserved > 0) {
-		unsigned char *buf = buf_pools[i].oldest();
-		buf_pools[i].remove_oldest();
+		unsigned char *buf = buf_pools[i].remove_and_get_oldest();
 		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
 		ring->slot[res1idx].buf_idx = NETMAP_BUF_IDX(ring, (char *) buf);
 		ring->slot[res1idx].flags |= NS_BUF_CHANGED;

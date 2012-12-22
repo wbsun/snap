@@ -5,6 +5,7 @@
 #include <click/glue.hh>
 #include <click/pbatch.hh>
 #include <g4c.h>
+#include <click/error.hh>
 #include <click/ring.hh>
 CLICK_DECLS
 
@@ -30,7 +31,8 @@ public:
 
 private:
     int _que_len;
-    volatile uint32_t _qlock;
+    volatile uint32_t _q_prod_lock;
+    volatile uint32_t _q_cons_lock;
     LFRing<PBatch*> _que;
     int _drops;
     bool _test;

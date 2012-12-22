@@ -34,6 +34,13 @@ PushBatchQueue::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "SCHED_ON_NEW", cpkN, cpBool, &_sched_on_new,
 		     cpEnd) < 0)
 	return -1;
+
+    if (__builtin_popcount(_que_len>>1) != 1) {
+	errh->fatal("PushBatchQueue queue length %d not"
+		    "power of 2", _que_len);
+	return -1;
+    }
+    
     return 0;
 }
 
@@ -54,15 +61,18 @@ PushBatchQueue::push(int i, Packet *p)
 void
 PushBatchQueue::bpush(int i, PBatch *pb)
 {
-    if (!_que.add_new(pb)) {
+    if (_que.full()) {
 	_drops += pb->size();
 	Batcher::kill_batch(pb);
 	if (_test)
 	    hvp_chatter("Batch %p killed\n",
 			pb);
     }
-    else if (_sched_on_new)
-	_task.fast_reschedule();	
+    else {
+	_que.add_new(pb);
+	if (_sched_on_new)
+	    _task.fast_reschedule();
+    }
 }
 
 bool
