@@ -7,7 +7,6 @@
 #include <g4c.h>
 #include <click/task.hh>
 #include <click/timer.hh>
-#include <click/ring.hh>
 #include <list>
 using namespace std;
 CLICK_DECLS

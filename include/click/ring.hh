@@ -135,7 +135,7 @@ public:
 	__asm__ volatile(""::"m"(tail));	    
     }
 
-    void remove_olest_with_wmb() {
+    void remove_oldest_with_wmb() {
 	__asm__ volatile("": :"m" (data[tail]), "m" (tail));
 	remove_oldest();
     }
