@@ -2,7 +2,6 @@
 #include "pushbatchqueue.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
-#include "batcher.hh"
 #include <click/confparse.hh>
 #include <click/standard/scheduleinfo.hh>
 #include <click/timestamp.hh>
@@ -47,13 +46,17 @@ PushBatchQueue::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 PushBatchQueue::initialize(ErrorHandler *errh)
 {
-    _que.reserve(_que_len);
+    if (!_que.reserve(_que_len)) {
+	errh->fatal("PushBatchQueue failed to reserve batch queue.\n");
+	return -1;
+    }
+    
     ScheduleInfo::initialize_task(this, &_task, errh);
     return 0;
 }
 
 void
-PushBatchQueue::push(int i, Packet *p)
+PushBatchQueue::push(int, Packet *)
 {
     hvp_chatter("Error: PushBatchQueue's push should not be called!\n");
 }
@@ -62,8 +65,8 @@ void
 PushBatchQueue::bpush(int i, PBatch *pb)
 {
     if (_que.full()) {
-	_drops += pb->size();
-	Batcher::kill_batch(pb);
+	_drops += pb->npkts;
+	pb->kill();
 	if (_test)
 	    hvp_chatter("Batch %p killed\n",
 			pb);
@@ -110,6 +113,5 @@ PushBatchQueue::run_task(Task *task)
 
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(Batcher)
 EXPORT_ELEMENT(PushBatchQueue)
 ELEMENT_LIBS(-lg4c)

@@ -2,12 +2,10 @@
 #include "h2d.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
-#include "batcher.hh"
 CLICK_DECLS
 
 H2D::H2D()
 {
-    _clear_pktflags = false;
     _test = false;
 }
 
@@ -43,23 +41,20 @@ H2D::bpush(int i, PBatch *pb)
     }
 
     g4c_h2d_async(pb->hwork_ptr, pb->dwork_ptr, pb->work_size, pb->dev_stream);
-    if (_clear_pktflags)
-	g4c_dev_memset(pb->dpktflags, 0, pb->capacity*sizeof(unsigned int),
-		       pb->dev_stream);
+
     output(0).bpush(pb);
 }
 
 void
 H2D::drop_batch(PBatch *pb)
 {
-    Batcher::kill_batch(pb, true);	
+    pb->kill();
 }
 
 int
 H2D::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_kparse(conf, this, errh,
-		     "CLEAR_PKTFLAGS", cpkN, cpBool, &_clear_pktflags,
 		     "TEST", cpkN, cpBool, &_test,
 		     cpEnd) < 0)
 	return -1;
@@ -73,6 +68,5 @@ H2D::initialize(ErrorHandler *errh)
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(Batcher)
 EXPORT_ELEMENT(H2D)
 ELEMENT_LIBS(-lg4c)

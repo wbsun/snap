@@ -25,7 +25,6 @@ public:
     int initialize(ErrorHandler *errh);
 
 private:
-    bool _clear_pktflags;
     bool _test;
 };
 

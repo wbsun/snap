@@ -61,18 +61,21 @@ struct PSliceRange {
  *             setup_anno();
  *             setup_slice_ranges();
  *             setup_mm();
- *             or simply setup().
+ *             or simply setup_all().
  *
  *             Then initialize PBatch pool if exists.
  *
- * For PBatch creation:
+ * For PBatch new creation:
  *       pb = new PBatch(self);  
  *       pb->init();
  *       alloc_batch_priv_data(pb);
  *       assign_batch_mem(pb, ... );
  *
+ * For PBatch alloc:
+ *       pb = alloc_batch();
+ *
  * For PBatch recyling:
- *       pb->recyle();
+ *       kill_batch(pb);
  */
 class BatchProducer {
 public:
@@ -155,6 +158,10 @@ public:
     virtual void init_mm();
     virtual void setup_mm();
 
+    inline bool has_lens() { return lens_offset >= 0; }
+    inline bool has_slices() { return slices_offset >= 0; }
+    inline bool has_annos() { return annos_offset >= 0; }
+
 
     //
     // Private data for batch users
@@ -173,21 +180,24 @@ public:
     
 public:
     // Call after init_xxx, req_xxx, set_xxx:
-    virtual void setup() {
+    virtual void setup_all() {
 	this->setup_anno();
 	this->setup_slice_ranges();
 	this->setup_mm();
     }
 
-    // Return 0 for OK recycled
-    //        1 for not recycle-able
-    //        negative for errors
-    virtual int recycle_batch(PBatch *pb) = 0;
+    //
+    // PBatch (pool) management:
+    //
+public:
+    // Allocate a new PBatch, may from pool (optional).
+    virtual PBatch* alloc_batch() = 0;
 
     // Try to destroy batch:
-    //        if pb shared by others, just dec shared.
-    //        if not shared, try recycle.
-    //        if not recycle-able, destroy it.
+    //        if pb shared by others, just dec shared, rt 1.
+    //        if not shared, try recycle. (optional). rt 0.
+    //        if not recycle-able, destroy it. rt 2.
+    //        on error, return negative.
     virtual int kill_batch(PBatch *pb) = 0;
 
     friend class PBatch;
@@ -222,7 +232,7 @@ public:
     virtual void setup_slice_ranges();
     virtual int16_t get_slice_offset(const PSliceRange &psr);
 
-    virtual int recycle_batch(PBatch *pb) = 0;
+    virtual PBatch* alloc_batch() = 0;
     virtual int kill_batch(PBatch *pb) = 0;
 
     firend class PBatch;
@@ -252,6 +262,42 @@ public:
 
     void init();
     void finit();
+
+    void kill() {
+	producer->kill_batch(this);
+    }
+
+public:
+    // Accessors:
+    inline uint8_t* slice_hptr(int idx) {
+	if (producer->slices_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    host_mem,
+	    producer->slices_offset+producer->get_slice_stride()*idx);
+    }
+
+    inline int16_t* length_hptr(int idx) {
+	if (producer->lens_offset < 0)
+	    return 0;
+	return (int16_t*)g4c_ptr_add(
+	    host_mem,
+	    producer->lens_offset+sizeof(int16_t)*idx);
+    }
+
+    inline uint8_t* anno_hptr(int idx) {
+	if (producer->anno_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    host_mem,
+	    producer->anno_offset+producer->anno_len*idx);
+    }
+
+    inline void* get_priv_data(size_t offset) {
+	if (priv_data)
+	    return g4c_ptr_add(priv_data, offset);
+	return 0;
+    }
 };
 
 #if 0  // Temporarily keep this because of lagecy uses of PBatch.

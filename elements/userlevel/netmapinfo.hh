@@ -84,33 +84,47 @@ public:
 	int tid = click_current_thread_id;
 	LFRing<unsigned char*>* pool = buf_pools+tid;
 
-	if (unlikely(tid >= nr_threads)) {
+	if (unlikely(tid >= nr_threads))
+	{
 	    click_chatter("Bad thread id %d catched at buffer dtor\n", tid);
 	    pool = buf_pools + nr_threads;
 	    if (nr_threads > 1)
-		while (atomic_uint32_t::swap(exception_buf_pool_lock, 1) == 1);
+		while (atomic_uint32_t::swap(exception_buf_pool_lock, 1)
+		       == 1);
 	}
 
-	if (unlikely(pool->full())) {
+	if (unlikely(pool->full()))
+	{
 	    click_chatter("NetmapInfo buffer pool full! Can't handle this, should abort!");
 	} else
 	    pool->add_new(buf);
 
-	if (unlikely(tid >= nr_threads) && nr_threads > 1) {
+	if (unlikely(tid >= nr_threads) && nr_threads > 1)
+	{
 	    click_compiler_fence();
 	    exception_buf_pool_lock = 0;
 	}	
     }
+    
     static bool refill(struct netmap_ring *ring, bool multiple=true) {
 	bool rt = false;
+	int i, tid = click_current_thread_id;
 
-	for (int i=0; i<=nr_threads && ring->reserved > 0; ++i) {
-	    if (need_consumer_locking) {
+	// Start from local thread to reduce racing.
+	for (int j=0; j<=nr_threads && ring->reserved > 0; ++j)
+	{
+	    i =  (tid+j)%(nr_threads+1);
+	    
+	    if (need_consumer_locking)
+	    {
 		while(atomic_uint32_t::swap(buf_consumer_locks[i], 1) == 1);
 	    }
-	    while (!buf_pools[i].empty() && ring->reserved > 0) {
+	    
+	    while (!buf_pools[i].empty() && ring->reserved > 0)
+	    {
 		unsigned char *buf = buf_pools[i].remove_and_get_oldest();
 		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
+		
 		ring->slot[res1idx].buf_idx = NETMAP_BUF_IDX(ring, (char *) buf);
 		ring->slot[res1idx].flags |= NS_BUF_CHANGED;
 		--ring->reserved;
@@ -121,7 +135,9 @@ public:
 //		else if (unlikely(!multiple))
 //		    goto unlock_and_out;
 	    }
-	    if (need_consumer_locking) {
+	    
+	    if (need_consumer_locking)
+	    {
 		click_compiler_fence();
 		buf_consumer_locks[i] = 0;
 	    }

@@ -2,7 +2,6 @@
 #include "debatcher.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
-#include "batcher.hh"
 CLICK_DECLS
 
 DeBatcher::DeBatcher()
@@ -14,7 +13,7 @@ DeBatcher::DeBatcher()
 DeBatcher::~DeBatcher()
 {
     if (_batch)
-	Batcher::kill_batch(_batch);
+	_batch->kill();
 }
 
 int
@@ -50,18 +49,19 @@ DeBatcher::pull(int port)
 	    _batch->dev_stream = 0;
 	}
 	
-	if (_batch->size() == 0) {
-	    Batcher::kill_batch(_batch);
+	if (_batch->npkts == 0) {
+	    _batch->kill();
 	    goto pull_batch;
 	}
 	_idx = 0;
     }
 
     Packet *p = _batch->pptrs[_idx++];
-    assert(p);
+//     assert(p);
 
-    if (_idx == _batch->size()) {
-	Batcher::kill_batch(_batch);
+    if (_idx == _batch->npkts) {
+	_batch->npkts = 0;
+	_batch->kill();
 	_batch = 0;
     }
 
@@ -76,9 +76,10 @@ DeBatcher::bpush(int i, PBatch *pb)
 	_batch->dev_stream = 0;
     }
     
-    for (int j = 0; j < pb->size(); j++)
+    for (int j = 0; j < pb->npkts; j++)
 	output(0).push(pb->pptrs[j]);
-    Batcher::kill_batch(pb);
+    pb->npkts = 0;
+    pb->kill();
 }
 
 PBatch *
@@ -88,6 +89,5 @@ DeBatcher::bpull(int port)
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(Batcher)
 EXPORT_ELEMENT(DeBatcher)
 ELEMENT_LIBS(-lg4c)

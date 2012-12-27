@@ -66,7 +66,7 @@ NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 	    {
 		if (!buf_pools[i].reserve(NM_BUF_SLOTS)) {
 		    errh->fatal(
-			"NetmapInfo buf pool %d failt to reserve space",
+			"NetmapInfo buf pool %d failed to reserve space",
 			i);
 		    return -1;
 		}

@@ -2,7 +2,6 @@
 #include "d2h.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
-#include "batcher.hh"
 CLICK_DECLS
 
 D2H::D2H()
@@ -32,7 +31,7 @@ D2H::bpush(int i, PBatch *pb)
     if (pb->dev_stream == 0) {
 	pb->dev_stream = g4c_alloc_stream();
 	if (pb->dev_stream == 0) {
-	    Batcher::kill_batch(pb);
+	    pb->kill();
 	    return;
 	}
     }
@@ -54,6 +53,5 @@ D2H::initialize(ErrorHandler *errh)
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(Batcher)
 EXPORT_ELEMENT(D2H)
 ELEMENT_LIBS(-lg4c)

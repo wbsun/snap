@@ -2,7 +2,6 @@
 #include "bunqueue.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
-#include "batcher.hh"
 #include <click/confparse.hh>
 #include <click/timestamp.hh>
 #include <click/atomic.hh>
@@ -49,19 +48,23 @@ BUnqueue::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 BUnqueue::initialize(ErrorHandler *errh)
 {
-    _que.reserve(_que_len);
+    if (!_que.reserve(_que_len)) {
+        errh->fatal("BUnqueue failed to reserve batch queue.\n");
+	return -1;
+    }
+    
     return 0;
 }
 
 void
-BUnqueue::push(int i, Packet *p)
+BUnqueue::push(int, Packet*)
 {
     hvp_chatter("Error: BUnqueue's push should not be called!\n");
 }
 
 
 Packet *
-BUnqueue::pull(int port)
+BUnqueue::pull(int)
 {
     hvp_chatter("Error: BUnqueue's pull should not be called!\n");
 }
@@ -72,11 +75,12 @@ BUnqueue::bpush(int i, PBatch *pb)
 //    while(atomic_uint32_t::swap(_q_prod_lock, 1) == 1);
 
     if (unlikely(_que.full())) {
-	_drops += pb->size();
-	Batcher::kill_batch(pb, true);
+	_drops += pb->npkts;
+	pb->kill();
     } else
 	_que.add_new(pb);
-    
+
+//     click_compiler_fence();
     _q_prod_lock = 0;
     
     if (_test)
@@ -96,6 +100,7 @@ BUnqueue::bpull(int port)
 	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream)) {
 	    _que.remove_oldest_with_wmb();
 
+// 	    click_compiler_fence();
 	    _q_cons_lock = 0;
 
 	    if (_test)
@@ -103,14 +108,13 @@ BUnqueue::bpull(int port)
 			    Timestamp::now().unparse().c_str());
 	    return pb;
 	} else {
-	    return 0;
+// 	    click_compiler_fence();
 	    _q_cons_lock = 0;
+	    return 0;
 	}
     }
 }
 
-
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(Batcher)
 EXPORT_ELEMENT(BUnqueue)
 ELEMENT_LIBS(-lg4c)

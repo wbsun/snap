@@ -7,7 +7,8 @@
 #include <g4c.h>
 #include <click/task.hh>
 #include <click/timer.hh>
-#include <list>
+#include <click/sync.hh>
+#include <click/ring.hh>
 using namespace std;
 CLICK_DECLS
 
@@ -19,17 +20,20 @@ CLICK_DECLS
  *   SLICE_BEGIN: int value
  *   SLICE_END: int value
  *   CAPACITY: int value for batch capacity
- *   ANN_FLAGS: unsigned char.
+ *   ANN_BEGIN: unsigned char.
+ *   ANN_END: unsigned char.
  *   FORCE_PKTLENS: bool value.
+ *   BATCH_PREALLOC: int value.
+ *   MT_PUSHERS: bool value.
  *   
  */
-class Batcher : public Element {
+class Batcher : public Element, public EthernetBatchProducer {
 public:
     Batcher();
     ~Batcher();
 
     const char *class_name() const	{ return "Batcher"; }
-    const char *port_count() const	{ return PORTS_1_1; }
+    const char *port_count() const	{ return "1-/1"; }
     const char *processing() const  { return PUSH; }
 
     void push(int i, Packet *p);
@@ -38,32 +42,13 @@ public:
 
     void run_timer(Timer *timer);
 
-    // Batcher/PBatch users are supposed to call the followings at their
-    // configuration time.
-    void set_slice_range(int begin, int end);
-    void set_anno_flags(unsigned char flags);
-    inline unsigned long set_batch_user_info(unsigned long priv_len)
-	{
-	    unsigned long cur = _user_priv_len;
-			
-	    _nr_users++;
-	    _user_priv_len += g4c_round_up(priv_len, 8); // for 64bit/8byte alignment.
-	    return cur;
-	}
-
-    static bool kill_batch(PBatch *pb, bool killpkt=false);
-
 private:
     int _batch_capacity;
-    int _cur_batch_size;
-    // should have a mutex or spin_lock to protect batch pointer.
     PBatch *_batch;
     int _slice_begin, _slice_end;
-    unsigned char _anno_flags;
+    unsigned char _anno_begin, _anno_end;
     bool _force_pktlens;
-
-    int _nr_users;
-    unsigned long _user_priv_len;
+    bool _mt_pushers;
 
     int _timeout_ms;
     Timer _timer;
@@ -73,12 +58,41 @@ private:
     int _drops;
     bool _test;
 
-    PBatch *alloc_batch();
-    PBatch *__alloc_batch();
-    void add_packet(Packet *p);
+public:
+    virtual PBatch *alloc_batch();
+    virtual int kill_batch(PBatch *pb);
 
-    static list<PBatch*> _pbpool;
-    static bool realkill_batch(PBatch *pb);
+private:
+    LFRing<PBatch*> *_pb_pools;
+    volatile uint32_t *_pb_alloc_locks;
+    volatile uint32_t _exp_pb_lock;
+    int _nr_pools;
+    bool _need_alloc_locking;
+    int _nr_pre_alloc;
+
+    // Call after configuration, need _mt_pushers, and other confs.
+    int init_pb_pool();
+
+    // Really allocate a new PBatch.
+    PBatch *create_new_batch();
+
+    // Initialize a batch after new creation.
+    int init_batch_after_create(PBatch* pb);
+
+    // Reset args after allocting a batch from pool.
+    int init_batch_after_recycle(PBatch* pb); 
+
+    // Clean up batch for recycling it.
+    int finit_batch_for_recycle(PBatch *pb);
+
+    // Try recycle batch, return false if not recycle-able.
+    bool recycle_batch(PBatch *pb);
+
+    // Really destroy a batch.
+    int destroy_batch(PBatch *pb);
+
+private:
+    void add_packet(Packet *p);
 };
 
 CLICK_ENDDECLS
