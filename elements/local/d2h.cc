@@ -15,15 +15,17 @@ D2H::~D2H()
 void
 D2H::push(int i, Packet *p)
 {
-    hvp_chatter("Error: D2H's push should not be called!\n");
+    output(0).push(p);
 }
 
 void
 D2H::bpush(int i, PBatch *pb)
 {
-    if (pb->work_size == 0 ||
-	pb->hwork_ptr == 0 ||
-	pb->dwork_ptr == 0) {
+    if (pb->work_size == 0
+#ifndef CLICK_NO_BATCH_TEST
+	|| pb->producer->test_mode >= BatchProducer::test_mode1
+#endif
+	) {
 	output(0).bpush(pb);
 	return;
     }
@@ -36,7 +38,8 @@ D2H::bpush(int i, PBatch *pb)
 	}
     }
 
-    g4c_d2h_async(pb->dwork_ptr, pb->hwork_ptr, pb->work_size, pb->dev_stream);
+    g4c_d2h_async(pb->dwork_ptr, pb->hwork_ptr,
+		  pb->work_size, pb->dev_stream);
     output(0).bpush(pb);
 }
 

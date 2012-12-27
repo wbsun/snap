@@ -57,9 +57,9 @@ BUnqueue::initialize(ErrorHandler *errh)
 }
 
 void
-BUnqueue::push(int, Packet*)
+BUnqueue::push(int, Packet* p)
 {
-    hvp_chatter("Error: BUnqueue's push should not be called!\n");
+    output(0).push(p);
 }
 
 
@@ -74,6 +74,13 @@ BUnqueue::bpush(int i, PBatch *pb)
 {
 //    while(atomic_uint32_t::swap(_q_prod_lock, 1) == 1);
 
+#ifndef CLICK_NO_BATCH_TEST
+    if (pb->producer->test_mode >= BatchProducer::test_mode1) {
+	_que.add_new(pb);
+	return;
+    }
+#endif
+
     if (unlikely(_que.full())) {
 	_drops += pb->npkts;
 	pb->kill();
@@ -81,7 +88,7 @@ BUnqueue::bpush(int i, PBatch *pb)
 	_que.add_new(pb);
 
 //     click_compiler_fence();
-    _q_prod_lock = 0;
+    // _q_prod_lock = 0;
     
     if (_test)
 	hvp_chatter("new batch %p added stream %d.\n",
@@ -97,11 +104,20 @@ BUnqueue::bpull(int port)
 //	while(atomic_uint32_t::swap(_q_cons_lock, 1) == 1);
 	
 	PBatch *pb = _que.oldest();
+	if (
+#ifndef CLICK_NO_BATCH_TEST
+	    pb->producer->test_mode >= BatchProducer::test_mode1 ||
+#endif
+	    pb->host_mem == 0) {
+	    _que.remove_oldest();
+	    return pb;
+	}
+	
 	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream)) {
 	    _que.remove_oldest_with_wmb();
 
 // 	    click_compiler_fence();
-	    _q_cons_lock = 0;
+	    // _q_cons_lock = 0;
 
 	    if (_test)
 		hvp_chatter("batch %p done at %s\n", pb,
@@ -109,7 +125,7 @@ BUnqueue::bpull(int port)
 	    return pb;
 	} else {
 // 	    click_compiler_fence();
-	    _q_cons_lock = 0;
+	    // _q_cons_lock = 0;
 	    return 0;
 	}
     }

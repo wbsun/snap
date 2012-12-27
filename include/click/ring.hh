@@ -127,12 +127,12 @@ public:
 	data[head] = v;
 	__asm__ volatile("": :"m" (data[head]), "m" (head));
 	head = (head+1)&mask;
-	__asm__ volatile(""::"m"(head));
+	// __asm__ volatile(""::"m"(head));
     }
 
     void remove_oldest() {
 	tail = (tail+1)&mask;
-	__asm__ volatile(""::"m"(tail));	    
+	// __asm__ volatile(""::"m"(tail));	    
     }
 
     void remove_oldest_with_wmb() {
@@ -144,7 +144,7 @@ public:
 	T& v = data[tail];
 	__asm__ volatile("": :"m" (data[tail]), "m" (tail));
 	tail = (tail+1)&mask;
-	__asm__ volatile(""::"m" (tail));
+	// __asm__ volatile(""::"m" (tail));
 	return v;
     }
 };

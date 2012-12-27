@@ -181,7 +181,7 @@ FromNMDevice::netmap_dispatch()
 
 	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 
-	while (/*n != _burst &&*/
+	while (n != _burst &&
 	       ring->avail > 0) {
 	    unsigned cur = ring->cur;
 	    unsigned buf_idx = ring->slot[cur].buf_idx;

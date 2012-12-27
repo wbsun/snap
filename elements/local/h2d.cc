@@ -17,17 +17,17 @@ H2D::~H2D()
 void
 H2D::push(int i, Packet *p)
 {
-    hvp_chatter("Error: H2D's push should not be called!\n");
+    output(0).push(p);
 }
 
 void
 H2D::bpush(int i, PBatch *pb)
 {
-    if (pb->work_size == 0 ||
-	pb->hwork_ptr == 0 ||
-	pb->dwork_ptr == 0) {
-	if (unlikely(_test))
-	    hvp_chatter("No copy\n");
+    if (pb->work_size == 0
+#ifndef CLICK_NO_BATCH_TEST    
+	|| pb->producer->test_mode >= BatchProducer::test_mode1
+#endif
+	) {
 	output(0).bpush(pb);
 	return;
     }

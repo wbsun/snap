@@ -27,8 +27,8 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _timeout_ms = CLICK_BATCH_TIMEOUT;
     _force_pktlens = false;
     _timed_batch = 0;
-    _test = false;
     _mt_pushers = false;
+    _test = 0;
 
     _pb_pools = 0;
     _pb_alloc_locks = 0;
@@ -46,8 +46,8 @@ Batcher::~Batcher()
 int
 Batcher::init_pb_pool()
 {
-    _nr_pools = master()->nthreads()+1;
-    if (_nr_pools <= 2 || _mt_pushers == false)
+    _nr_pools = master()->nthreads();
+    if (_nr_pools <= 1 || _mt_pushers == false)
 	_need_alloc_locking = false;
 
     hvp_chatter("Batcher pool, %d pools, %s alloc locking.\n",
@@ -159,28 +159,33 @@ Batcher::finit_batch_for_recycle(PBatch *pb)
 bool
 Batcher::recycle_batch(PBatch *pb)
 {
-    int tid = click_current_thread_id;
-    LFRing<PBatch*> *pool = _pb_pools+tid;
-    bool rt = true;
+//    int tid = click_current_thread_id;
+    LFRing<PBatch*> *pool = _pb_pools+click_current_thread_id;
 
+#if 0
     if (unlikely(tid >= _nr_pools-1)) {
 	hvp_chatter("Bad thread id %d catched at recycle batch\n.", tid);
 	pool = _pb_pools + (_nr_pools-1);
 	if (_nr_pools > 2)
 	    while(atomic_uint32_t::swap(_exp_pb_lock, 1) == 1);
     }
+#endif
 
-    if (unlikely(pool->full())) {
-	rt = false;
-    } else
+    if (!pool->full()) {
 	pool->add_new(pb);
+	return true;
+    }
+    else
+	return false;
 
+#if 0
     if (unlikely(tid >= _nr_pools-1) && _nr_pools > 2) {
 	click_compiler_fence();
 	_exp_pb_lock = 0;
     }
+#endif
 
-    return rt;
+//    return rt;
 }
 
 int
@@ -201,13 +206,14 @@ PBatch*
 Batcher::alloc_batch()
 {
     PBatch *pb = 0;
-    int i;//, tid = click_current_thread_id;
+    int i, tid = click_current_thread_id;
 
     for (int j=0; j<_nr_pools && !pb; ++j)
     {
-	i = j;//(tid+j)%_nr_pools;
+	i = (tid+j)%_nr_pools;
+	
 	if (_need_alloc_locking) {
-	    hvp_chatter("locking for pool alloc\n");
+	    // hvp_chatter("locking for pool alloc\n");
 	    while(atomic_uint32_t::swap(_pb_alloc_locks[i], 1) == 1);
 	}
 
@@ -217,13 +223,13 @@ Batcher::alloc_batch()
 	}
 
 	if (_need_alloc_locking) {
-	    click_compiler_fence();
+	    // click_compiler_fence();
 	    _pb_alloc_locks[i] = 0;
 	}
     }
 
     if (pb) {
-	//this->init_batch_after_recycle(pb);
+	;//this->init_batch_after_recycle(pb);
     } else {
 	hvp_chatter("Bad we have to create new batch...\n");
 	pb = create_new_batch();
@@ -266,7 +272,11 @@ Batcher::add_packet(Packet *p)
     _batch->npkts++;
     _batch->pptrs[idx] = p;
 
-    const uint8_t *pd_start = p->data();//p->has_mac_header()?p->mac_header():p->data();
+    if (!mem_size || _test >= test_mode1)
+	return;
+
+    const uint8_t *pd_start = p->data();
+//p->has_mac_header()?p->mac_header():p->data();
     size_t plen = p->end_data() - pd_start;
 
     if (this->has_lens()) {
@@ -306,6 +316,11 @@ Batcher::add_packet(Packet *p)
 void
 Batcher::push(int i, Packet *p)
 {
+    if (_test == test_mode2) {
+	output(0).push(p);
+	return;
+    }
+    
     if (!_batch) {
 	_batch = alloc_batch();
 	if (unlikely(!_batch)) {
@@ -315,18 +330,18 @@ Batcher::push(int i, Packet *p)
     }
 
     add_packet(p);
-    _count++;
+    //_count++;
 	
     if (_batch->npkts >= this->batch_size) {
+	output(0).bpush(_batch);
+	_batch = alloc_batch();
+	
 	if (unlikely(_test)) {
 	    hvp_chatter("batch %p full at %s\n", _batch,
 			Timestamp::now().unparse().c_str());
 	}
 	if (unlikely(_timer.scheduled()))
-	    _timer.clear();
-	PBatch *oldbatch = _batch;
-	_batch = alloc_batch();
-	output(0).bpush(oldbatch);
+	    _timer.clear();	
     }
 }
 
@@ -343,7 +358,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "FORCE_PKTLENS", cpkN, cpBool, &_force_pktlens,
 		     "BATCH_PREALLOC", cpkN, cpInteger, &_nr_pre_alloc,
 		     "MT_PUSHERS", cpkN, cpBool, &_mt_pushers,
-		     "TEST", cpkN, cpBool, &_test,
+		     "TEST", cpkN, cpInteger, &_test,
 		     cpEnd) < 0)
 	return -1;
 
@@ -361,8 +376,14 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
     }
 
     if (_anno_end != 0) {
-	this->req_anno(_anno_begin, _anno_end-_anno_begin, anno_write|anno_read);
+	this->req_anno(_anno_begin, _anno_end-_anno_begin,
+		       anno_write|anno_read);
     }
+
+#ifndef CLICK_NO_BATCH_TEST
+    test_mode = _test%10;
+    _test = _test/10;
+#endif
     
     return 0;
 }

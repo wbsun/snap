@@ -73,7 +73,7 @@ Discard::run_task(Task *)
     _count += sent;
     if (_active && (sent || _signal))
 	_task.fast_reschedule();
-    return sent != 0;
+    return true; //sent != 0;
 }
 
 int

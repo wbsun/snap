@@ -57,12 +57,12 @@ NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 	else
 	    need_consumer_locking = true;
 
-	buf_pools = new LFRing<unsigned char*>[nr_threads+1];
-	buf_consumer_locks = new uint32_t[nr_threads+1];
+	buf_pools = new LFRing<unsigned char*>[nr_threads];
+	buf_consumer_locks = new uint32_t[nr_threads];
 	exception_buf_pool_lock = 0;
 	if (buf_pools && buf_consumer_locks)
 	{
-	    for (int i=0; i<nr_threads+1; i++)
+	    for (int i=0; i<nr_threads; i++)
 	    {
 		if (!buf_pools[i].reserve(NM_BUF_SLOTS)) {
 		    errh->fatal(

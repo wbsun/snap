@@ -49,6 +49,7 @@ private:
     unsigned char _anno_begin, _anno_end;
     bool _force_pktlens;
     bool _mt_pushers;
+    int _test;
 
     int _timeout_ms;
     Timer _timer;
@@ -56,7 +57,6 @@ private:
 
     int _count;
     int _drops;
-    bool _test;
 
 public:
     virtual PBatch *alloc_batch();

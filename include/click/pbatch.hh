@@ -83,8 +83,15 @@ public:
 	this->init_slice_ranges();
 	this->init_anno();
 	this->init_mm();
+#ifndef CLICK_NO_BATCH_TEST    
+	test_mode = 0;
+#endif
     }
-
+    
+    enum {test_mode1 = 2, test_mode2};
+#ifndef CLICK_NO_BATCH_TEST    
+    int test_mode;
+#endif
 
     //
     // Packet slice settings:

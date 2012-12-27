@@ -81,9 +81,10 @@ public:
 	return p->buffer_destructor() == buffer_destructor;
     }
     static void buffer_destructor(unsigned char *buf, size_t) {
-	int tid = click_current_thread_id;
-	LFRing<unsigned char*>* pool = buf_pools+tid;
+//	int tid = click_current_thread_id;
+	LFRing<unsigned char*>* pool = buf_pools+click_current_thread_id;
 
+#if 0
 	if (unlikely(tid >= nr_threads))
 	{
 	    click_chatter("Bad thread id %d catched at buffer dtor\n", tid);
@@ -92,18 +93,22 @@ public:
 		while (atomic_uint32_t::swap(exception_buf_pool_lock, 1)
 		       == 1);
 	}
-
-	if (unlikely(pool->full()))
+#endif
+	
+	if (!pool->full())
 	{
-	    click_chatter("NetmapInfo buffer pool full! Can't handle this, should abort!");
+	    pool->add_new(buf);	    
 	} else
-	    pool->add_new(buf);
+	    click_chatter("NetmapInfo buffer pool full! Can't handle this, should abort!");
 
+
+#if 0
 	if (unlikely(tid >= nr_threads) && nr_threads > 1)
 	{
 	    click_compiler_fence();
 	    exception_buf_pool_lock = 0;
-	}	
+	}
+#endif
     }
     
     static bool refill(struct netmap_ring *ring, bool multiple=true) {
@@ -111,9 +116,9 @@ public:
 	int i, tid = click_current_thread_id;
 
 	// Start from local thread to reduce racing.
-	for (int j=0; j<=nr_threads && ring->reserved > 0; ++j)
+	for (int j=0; j<nr_threads && ring->reserved > 0; ++j)
 	{
-	    i =  (tid+j)%(nr_threads+1);
+	    i =  (tid+j)%nr_threads;
 	    
 	    if (need_consumer_locking)
 	    {
