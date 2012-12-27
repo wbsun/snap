@@ -196,8 +196,6 @@ FromNMDevice::netmap_dispatch()
 				 ring->slot[cur].len,
 				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
-		--ring->avail;
-		ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 		--nzcopy;
 	    } else {
 		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
