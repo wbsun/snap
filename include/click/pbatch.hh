@@ -43,7 +43,7 @@ struct PSliceRange {
 	this->start_offset = v.start_offset;
 	this->len = v.len;
 	this->end = v.end;
-	this->slice_offset = v.offset;
+	this->slice_offset = v.slice_offset;
 	return *this;
     }
 };
@@ -235,7 +235,7 @@ public:
     virtual PBatch* alloc_batch() = 0;
     virtual int kill_batch(PBatch *pb) = 0;
 
-    firend class PBatch;
+    friend class PBatch;
 };
 
 class PBatch {
@@ -260,7 +260,7 @@ public:
     PBatch(BatchProducer *prod);
     virtual ~PBatch();
 
-    void init();
+    int init();
     void finit();
 
     void kill() {
@@ -286,11 +286,11 @@ public:
     }
 
     inline uint8_t* anno_hptr(int idx) {
-	if (producer->anno_offset < 0)
+	if (producer->annos_offset < 0)
 	    return 0;
 	return (uint8_t*)g4c_ptr_add(
 	    host_mem,
-	    producer->anno_offset+producer->anno_len*idx);
+	    producer->annos_offset+producer->anno_len*idx);
     }
 
     inline void* get_priv_data(size_t offset) {

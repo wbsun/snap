@@ -74,7 +74,7 @@ BatchProducer::req_slice_range(PSliceRange &psr)
 	    typeof(a) _a = a;					\
 	    typeof(b) _b = b;					\
 	    _a > _b? _a:_b; })
-#define __merge_anno_range(sdst, ldst, snew, lnew) {		\
+#define __merge_anno_range(sdst, ldst, snew, lnew) 		\
 	if ((ldst) == 0) {					\
 	    ldst = (lnew);					\
 	    sdst = (snew);					\
@@ -100,12 +100,15 @@ BatchProducer::init_anno()
 int
 BatchProducer::req_anno(uint8_t start, uint8_t len, uint8_t rw)
 {
-    if (rw & anno_write)	    
+    if (rw & anno_write) {	    
 	__merge_anno_range(w_anno_start, w_anno_len,
 			   start, len);
-    if (rw & anno_read)
-	__merge_range(r_anno_start, r_anno_len,
-		      start, len);
+    }
+    
+    if (rw & anno_read) {
+	__merge_anno_range(r_anno_start, r_anno_len,
+			   start, len);
+    }
     return 0;
 }
 
@@ -114,9 +117,10 @@ BatchProducer::setup_anno()
 {
     anno_len = w_anno_len;
     anno_start = w_anno_start;
-    if (r_anno_len != 0)
+    if (r_anno_len != 0) {
 	__merge_anno_range(anno_start, anno_len,
 			   r_anno_start, r_anno_len);
+    }
 }
 
 int8_t
@@ -131,7 +135,8 @@ int
 BatchProducer::assign_batch_mem(PBatch *pb, void *hm, void *dm, size_t msz)
 {
     pb->host_mem = hm;
-    pb->dev_mem = dm;    
+    pb->dev_mem = dm;
+    return 0;
 }
 
 void
@@ -233,7 +238,7 @@ void
 EthernetBatchProducer::setup_slice_ranges()
 {
     // Rare case:
-    if (nr_slice_ranges_re1 == 0) {
+    if (nr_slice_ranges_req == 0) {
 	nr_slice_ranges = 0;
 	return;
     }
@@ -243,10 +248,10 @@ EthernetBatchProducer::setup_slice_ranges()
     {
 	nr_slice_ranges = 1;
 
-	slice_ranges[0].start = req_slice_ranges[i].start+
-	    req_slice_ranges[i].start_offset;
+	slice_ranges[0].start = req_slice_ranges[0].start+
+	    req_slice_ranges[0].start_offset;
 	slice_ranges[0].start_offset = 0;
-	slice_ranges[0].len = pslice_real_length(req_slice_rangs[i]);
+	slice_ranges[0].len = pslice_real_length(req_slice_ranges[0]);
 	return;
     }
 
@@ -269,7 +274,7 @@ EthernetBatchProducer::setup_slice_ranges()
 
     // First merge, which merges overlapped ranges only:
     int16_t tlen = 0;
-    list<pair<int16_t, int16_t> >::ite = pl1->begin();
+    list<pair<int16_t, int16_t> >::iterator ite = pl1->begin();
     pair<int16_t, int16_t> prev = *ite;
     while(ite++ != pl1->end())
     {
@@ -311,7 +316,8 @@ EthernetBatchProducer::setup_slice_ranges()
 	    while (ite++ != pl1->end()) {
 		pair<int16_t, int16_t> cur = *ite;
 
-		if ((float)(((float)(cur.first - prev.second))/((float)(tlen)))
+		if ((float)(((float)(cur.first - prev.second))/
+			    ((float)(tlen)))
 		    >= EthernetBatchProducer::merge_threshold) {
 		    tlen += cur.first-prev.second;
 
@@ -391,7 +397,7 @@ PBatch::init()
     shared = 0;
     priv_data = 0;
     
-    pptrs = new Packet*[produder->batch_size];
+    pptrs = new Packet*[producer->batch_size];
     if (!pptrs) {
 	click_chatter("PBatch out of mem for Packet pointers.");
 	return -1;

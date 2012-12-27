@@ -1,5 +1,6 @@
 #include <click/config.h>
 #include "h2d.hh"
+#include <click/confparse.hh>
 #include <click/error.hh>
 #include <click/hvputils.hh>
 CLICK_DECLS
@@ -25,6 +26,8 @@ H2D::bpush(int i, PBatch *pb)
     if (pb->work_size == 0 ||
 	pb->hwork_ptr == 0 ||
 	pb->dwork_ptr == 0) {
+	if (unlikely(_test))
+	    hvp_chatter("No copy\n");
 	output(0).bpush(pb);
 	return;
     }
@@ -33,14 +36,18 @@ H2D::bpush(int i, PBatch *pb)
 	pb->dev_stream = g4c_alloc_stream();
 	if (pb->dev_stream == 0) {
 	    if (_test) {
-		hvp_chatter("Drop pbatch %p because of stream shortage\n", pb);
+		hvp_chatter(
+		    "Drop pbatch %p because of stream shortage\n", pb);
 	    }
 	    drop_batch(pb);
 	    return;
 	}
     }
 
-    g4c_h2d_async(pb->hwork_ptr, pb->dwork_ptr, pb->work_size, pb->dev_stream);
+    g4c_h2d_async(pb->hwork_ptr, pb->dwork_ptr,
+		  pb->work_size, pb->dev_stream);
+    if (unlikely(_test))
+	hvp_chatter("Copied %d bytes\n", pb->work_size);
 
     output(0).bpush(pb);
 }

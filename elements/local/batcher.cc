@@ -1,12 +1,13 @@
 #include <click/config.h>
-#include "batcher.hh"
 #include <click/error.hh>
+#include "batcher.hh"
 #include <click/glue.hh>
 #include <click/standard/alignmentinfo.hh>
 #include <click/hvputils.hh>
 #include <click/confparse.hh>
 #include <click/pbatch.hh>
 #include <click/timestamp.hh>
+#include <click/master.hh>
 CLICK_DECLS
 
 // Bigger enough to hold batches.
@@ -31,7 +32,7 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
 
     _pb_pools = 0;
     _pb_alloc_locks = 0;
-    _exp_pb_locks = 0;
+    _exp_pb_lock = 0;
     _nr_pools = 0;
     _need_alloc_locking = true;
     _nr_pre_alloc = 10;
@@ -48,6 +49,9 @@ Batcher::init_pb_pool()
     _nr_pools = master()->nthreads()+1;
     if (_nr_pools <= 2 || _mt_pushers == false)
 	_need_alloc_locking = false;
+
+    hvp_chatter("Batcher pool, %d pools, %s alloc locking.\n",
+		_nr_pools, _need_alloc_locking?"need":"no");
 
     _pb_pools = new LFRing<PBatch*>[_nr_pools];
     _pb_alloc_locks = new uint32_t[_nr_pools];
@@ -109,14 +113,17 @@ Batcher::init_batch_after_create(PBatch *pb)
 	void *hm = g4c_alloc_page_lock_mem(this->mem_size);
 	void *dm = g4c_alloc_dev_mem(this->mem_size);
 	if (hm && dm) {
-	    this->assign_batch_mem(hm, dm, this->mem_size);
+	    this->assign_batch_mem(pb, hm, dm, this->mem_size);
 	} else {
-	    hvp_chatter("Mem alloc failed for batch %p, hm %p, dm %p, sz %lu.\n",
+	    hvp_chatter("Mem alloc failed for batch %p, hm %p, "
+			"dm %p, sz %lu.\n",
 			pb, hm, dm, this->mem_size);
 	    return -1;
 	}
 
-	init_batch_after_recycle(pb);
+        pb->hwork_ptr = pb->host_mem;
+	pb->dwork_ptr = pb->dev_mem;
+	pb->work_size = (int)this->mem_size;
     }
     
     return 0;
@@ -124,10 +131,7 @@ Batcher::init_batch_after_create(PBatch *pb)
 
 int
 Batcher::init_batch_after_recycle(PBatch *pb)
-{    
-    pb->hwork_ptr = pb->host_mem;
-    pb->dwork_ptr = pb->dev_mem;
-    pb->work_size = (int)this->mem_size;
+{       
     return 0;
 }
 
@@ -144,6 +148,10 @@ Batcher::finit_batch_for_recycle(PBatch *pb)
     for (int i=0; i<pb->npkts; i++)
 	pb->pptrs[i]->kill();
     pb->npkts = 0;
+
+    pb->hwork_ptr = pb->host_mem;
+    pb->dwork_ptr = pb->dev_mem;
+    pb->work_size = (int)this->mem_size;
 
     return 0;
 }
@@ -193,12 +201,13 @@ PBatch*
 Batcher::alloc_batch()
 {
     PBatch *pb = 0;
-    int i, tid = click_current_thread_id;
+    int i;//, tid = click_current_thread_id;
 
     for (int j=0; j<_nr_pools && !pb; ++j)
     {
-	i = (tid+j)%_nr_pools;
+	i = j;//(tid+j)%_nr_pools;
 	if (_need_alloc_locking) {
+	    hvp_chatter("locking for pool alloc\n");
 	    while(atomic_uint32_t::swap(_pb_alloc_locks[i], 1) == 1);
 	}
 
@@ -214,8 +223,9 @@ Batcher::alloc_batch()
     }
 
     if (pb) {
-	this->init_batch_after_recycle(pb);
+	//this->init_batch_after_recycle(pb);
     } else {
+	hvp_chatter("Bad we have to create new batch...\n");
 	pb = create_new_batch();
 	this->init_batch_after_create(pb);
     }

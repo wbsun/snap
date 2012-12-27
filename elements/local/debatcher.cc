@@ -71,9 +71,9 @@ DeBatcher::pull(int port)
 void
 DeBatcher::bpush(int i, PBatch *pb)
 {
-    if (_batch->dev_stream) {
-	g4c_free_stream(_batch->dev_stream);
-	_batch->dev_stream = 0;
+    if (pb->dev_stream) {
+	g4c_free_stream(pb->dev_stream);
+	pb->dev_stream = 0;
     }
     
     for (int j = 0; j < pb->npkts; j++)
@@ -86,6 +86,7 @@ PBatch *
 DeBatcher::bpull(int port)
 {
     hvp_chatter("Error: DeBatcher's bpull should not be called!\n");
+    return 0;
 }
 
 CLICK_ENDDECLS
