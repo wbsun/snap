@@ -171,7 +171,7 @@ FromNMDevice::netmap_dispatch()
 
 	NetmapInfo::refill(ring);
 
-	if (_test)
+	if (unlikely(_test))
 	    click_chatter("netmap ring %u slots, av %u, rings %u",
 			  ring->num_slots, ring->avail,
 			  _netmap.ring_end - _netmap.ring_begin);
@@ -196,12 +196,15 @@ FromNMDevice::netmap_dispatch()
 				 ring->slot[cur].len,
 				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
+		--ring->avail;
+		ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 		--nzcopy;
 	    } else {
 		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
 		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
 		ring->slot[res1idx].buf_idx = buf_idx;
 	    }
+
 	    ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 	    --ring->avail;
 	    ++n;

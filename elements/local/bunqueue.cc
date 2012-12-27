@@ -98,8 +98,9 @@ BUnqueue::bpush(int i, PBatch *pb)
 PBatch *
 BUnqueue::bpull(int port)
 {
-    if (_que.empty())
+    if (_que.empty()) {
 	return 0;
+    }
     else {
 //	while(atomic_uint32_t::swap(_q_cons_lock, 1) == 1);
 	
@@ -109,6 +110,8 @@ BUnqueue::bpull(int port)
 	    pb->producer->test_mode >= BatchProducer::test_mode1 ||
 #endif
 	    pb->host_mem == 0) {
+	    if (_test)
+		hvp_chatter("batch %p done\n", pb);
 	    _que.remove_oldest();
 	    return pb;
 	}

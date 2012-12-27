@@ -114,6 +114,9 @@ Batcher::init_batch_after_create(PBatch *pb)
 	void *dm = g4c_alloc_dev_mem(this->mem_size);
 	if (hm && dm) {
 	    this->assign_batch_mem(pb, hm, dm, this->mem_size);
+	    if (test_mode)
+		hvp_chatter("Alloc G4C mem for batch %p %lu\n",
+			    pb, mem_size);
 	} else {
 	    hvp_chatter("Mem alloc failed for batch %p, hm %p, "
 			"dm %p, sz %lu.\n",
@@ -229,6 +232,9 @@ Batcher::alloc_batch()
     }
 
     if (pb) {
+	if (_test) {
+	    hvp_chatter("reuser batch %p\n", pb);
+	}
 	;//this->init_batch_after_recycle(pb);
     } else {
 	hvp_chatter("Bad we have to create new batch...\n");
