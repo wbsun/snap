@@ -48,6 +48,8 @@ class FromNMDevice : public Element { public:
 
     bool _test;
 
+    bool _fd_added;
+
     bool _force_ip;
     int _burst;
     int _datalink;

@@ -12,7 +12,7 @@ CLICK_DECLS
 
 // Bigger enough to hold batches.
 // Doesn't waste much memory, 8 bytes each item.
-#define CLICK_PBATCH_POOL_SIZE 65536
+#define CLICK_PBATCH_POOL_SIZE 16
 
 Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
 {
@@ -35,7 +35,12 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _exp_pb_lock = 0;
     _nr_pools = 0;
     _need_alloc_locking = true;
-    _nr_pre_alloc = 10;
+    _nr_pre_alloc = 15;
+
+    _forced_nr_pools = 0;
+    _forced_alloc_locking = false;
+    _forced_free_locking = false;
+    _need_free_locking = false;
 }
 
 Batcher::~Batcher()
@@ -46,22 +51,37 @@ Batcher::~Batcher()
 int
 Batcher::init_pb_pool()
 {
-    _nr_pools = master()->nthreads();
+    if (_forced_nr_pools > 0)
+	_nr_pools = _forced_nr_pools;
+    else
+	_nr_pools = master()->nthreads();
+    
     if (_nr_pools <= 1 || _mt_pushers == false)
 	_need_alloc_locking = false;
 
-    hvp_chatter("Batcher pool, %d pools, %s alloc locking.\n",
-		_nr_pools, _need_alloc_locking?"need":"no");
+    if (_forced_nr_pools > 0) {
+	_need_alloc_locking = _forced_alloc_locking;
+	_need_free_locking = _forced_free_locking;
+    }
+    
+    hvp_chatter("Batcher pool, %s %d pools, "
+		"%s alloc locking, "
+		"%s free locking.\n",
+		(_forced_nr_pools?"forced":"per-thread"),
+		_nr_pools, _need_alloc_locking?"need":"no",
+		_need_free_locking?"need":"no");
 
     _pb_pools = new LFRing<PBatch*>[_nr_pools];
     _pb_alloc_locks = new uint32_t[_nr_pools];
+    _pb_free_locks = new uint32_t[_nr_pools];
     _exp_pb_lock = 0;
-    if (_pb_pools && _pb_alloc_locks)
+    if (_pb_pools && _pb_alloc_locks && _pb_free_locks)
     {
 	for (int i=0; i<_nr_pools; i++)
 	{
 	    if (!_pb_pools[i].reserve(CLICK_PBATCH_POOL_SIZE)) {
-		hvp_chatter("Batcher batch pool %d failed to reserve space.", i);
+		hvp_chatter("Batcher batch pool %d failed "
+			    "to reserve space.", i);
 		return -1;
 	    }
 
@@ -70,7 +90,8 @@ Batcher::init_pb_pool()
 		for (int j=0; j<_nr_pre_alloc; j++) {
 		    PBatch* p = this->create_new_batch();
 		    if (!p) {
-			hvp_chatter("Failed to create %d-th batch for %d pool pre-allocation.",
+			hvp_chatter("Failed to create %d-th batch"
+				    " for %d pool pre-allocation.",
 				    j, i);
 			return -1;
 		    }
@@ -82,6 +103,7 @@ Batcher::init_pb_pool()
 	    }
 
 	    _pb_alloc_locks[i] = 0;
+	    _pb_free_locks[i] = 0;
 	}
     }
     else
@@ -132,11 +154,6 @@ Batcher::init_batch_after_create(PBatch *pb)
     return 0;
 }
 
-int
-Batcher::init_batch_after_recycle(PBatch *pb)
-{       
-    return 0;
-}
 
 int
 Batcher::finit_batch_for_recycle(PBatch *pb)
@@ -162,33 +179,76 @@ Batcher::finit_batch_for_recycle(PBatch *pb)
 bool
 Batcher::recycle_batch(PBatch *pb)
 {
-//    int tid = click_current_thread_id;
-    LFRing<PBatch*> *pool = _pb_pools+click_current_thread_id;
+    LFRing<PBatch*> *pool;
+    bool rt = false;
+    
+    if (_forced_nr_pools)
+    {
+	if (!_need_free_locking)
+	{
+	    for (int i=0; i<_nr_pools; i++) {
+		pool = _pb_pools+i;
+		if (!pool->full()) {
+		    pool->add_new(pb);
+		    rt = true;
+		    break;
+		}		    
+	    }
+	}
+	else
+	{
+	    for (int i=0; i<_nr_pools && !rt; i++) {
+		pool = _pb_pools+i;
+		while(atomic_uint32_t::swap(_pb_free_locks[i], 1)
+		      == 1);
 
-#if 0
-    if (unlikely(tid >= _nr_pools-1)) {
-	hvp_chatter("Bad thread id %d catched at recycle batch\n.", tid);
-	pool = _pb_pools + (_nr_pools-1);
-	if (_nr_pools > 2)
-	    while(atomic_uint32_t::swap(_exp_pb_lock, 1) == 1);
-    }
-#endif
-
-    if (!pool->full()) {
-	pool->add_new(pb);
-	return true;
+		if (!pool->full()) {
+		    pool->add_new(pb);
+		    rt = true;
+		}
+		_pb_free_locks[i] = 0;		
+	    }
+	}
     }
     else
-	return false;
+    {    
+	int tid = click_current_thread_id;    
+	pool = _pb_pools+tid;
 
 #if 0
-    if (unlikely(tid >= _nr_pools-1) && _nr_pools > 2) {
-	click_compiler_fence();
-	_exp_pb_lock = 0;
-    }
+	if (unlikely(tid >= _nr_pools-1)) {
+	    hvp_chatter("Bad thread id %d catched"
+			" at recycle batch\n.", tid);
+	    pool = _pb_pools + (_nr_pools-1);
+	    if (_nr_pools > 2)
+		while(atomic_uint32_t::swap(_exp_pb_lock, 1) == 1);
+	}
 #endif
 
-//    return rt;
+	if (!_need_free_locking) {	
+	    if (!pool->full()) {
+		pool->add_new(pb);
+		rt = true;
+	    }
+	} else {
+	    while(atomic_uint32_t::swap(_pb_free_locks[tid], 1) == 1);
+	    
+	    if (!pool->full()) {
+		pool->add_new(pb);
+		rt = true;
+	    } 
+	    _pb_free_locks[tid] = 0;	
+	}
+
+#if 0
+	if (unlikely(tid >= _nr_pools-1) && _nr_pools > 2) {
+	    click_compiler_fence();
+	    _exp_pb_lock = 0;
+	}
+#endif
+    }
+
+    return rt;
 }
 
 int
@@ -207,13 +267,16 @@ Batcher::destroy_batch(PBatch *pb)
 
 PBatch*
 Batcher::alloc_batch()
-{
+{	
     PBatch *pb = 0;
     int i, tid = click_current_thread_id;
 
     for (int j=0; j<_nr_pools && !pb; ++j)
     {
-	i = (tid+j)%_nr_pools;
+	if (!_forced_nr_pools)
+	    i = (tid+j)%_nr_pools;
+	else
+	    i = j;
 	
 	if (_need_alloc_locking) {
 	    // hvp_chatter("locking for pool alloc\n");
@@ -233,11 +296,14 @@ Batcher::alloc_batch()
 
     if (pb) {
 	if (_test) {
-	    hvp_chatter("reuser batch %p\n", pb);
+	    hvp_chatter("reuse batch %p\n", pb);
 	}
 	;//this->init_batch_after_recycle(pb);
     } else {
-	hvp_chatter("Bad we have to create new batch...\n");
+	if (_test)
+	    hvp_chatter("Bad we have to create new batch...\n");
+	if (test_mode == test_mode3)
+	    return 0;
 	pb = create_new_batch();
 	this->init_batch_after_create(pb);
     }
@@ -278,7 +344,7 @@ Batcher::add_packet(Packet *p)
     _batch->npkts++;
     _batch->pptrs[idx] = p;
 
-    if (!mem_size || _test >= test_mode1)
+    if (!mem_size || test_mode >= test_mode1)
 	return;
 
     const uint8_t *pd_start = p->data();
@@ -365,8 +431,19 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "BATCH_PREALLOC", cpkN, cpInteger, &_nr_pre_alloc,
 		     "MT_PUSHERS", cpkN, cpBool, &_mt_pushers,
 		     "TEST", cpkN, cpInteger, &_test,
+		     "NR_POOLS", cpkN, cpInteger, &_forced_nr_pools,
+		     "ALLOC_LOCK", cpkN, cpBool, &_forced_alloc_locking,
+		     "FREE_LOCK", cpkN, cpBool, &_forced_free_locking,
 		     cpEnd) < 0)
 	return -1;
+
+    if (_nr_pre_alloc >= CLICK_PBATCH_POOL_SIZE) {
+	errh->warning("Batch pool pre-alloc number %d larger than "
+		      "or equal to pool size %d, "
+		      "reset to pool_size-1.", _nr_pre_alloc,
+		      CLICK_PBATCH_POOL_SIZE);
+	_nr_pre_alloc = CLICK_PBATCH_POOL_SIZE-1;
+    }
 
     this->set_batch_size(_batch_capacity);
     this->need_lens = _force_pktlens;

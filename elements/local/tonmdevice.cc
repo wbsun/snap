@@ -96,8 +96,8 @@ ToNMDevice::initialize(ErrorHandler *errh)
 	    _fd = _netmap.open(_ifname, true, errh);
 	if (_fd >= 0) {
 	    _my_fd = true;
-	    if (!_full_nm)
-		add_select(_fd, SELECT_READ); // NB NOT writable!
+//	    if (!_full_nm)
+	    add_select(_fd, SELECT_READ); // NB NOT writable!
 	} else
 	    return -1;
     }
@@ -224,6 +224,10 @@ ToNMDevice::run_task(Task *)
     int r = 0;
     if (_full_nm) {
 	r = NetmapInfo::run_fd_poll(_nm_fd);
+
+	if (r < 0)
+	    _task.fast_reschedule();
+
 	if (!r)
 	    return false;
 	else
@@ -275,18 +279,20 @@ ToNMDevice::run_task(Task *)
 	checked_output_push(1, p);
     }
 
-    if (p && !_full_nm)
+    if (p)
 	_task.fast_reschedule();
     return count > 0;
 }
 
 void
-ToNMDevice::selected(int, int)
+ToNMDevice::selected(int fd, int mask)
 {
     if (_full_nm) {
 	send_packets_nm();
+	
+	if (!(mask & NetmapInfo::FROM_NM))
+	    _task.reschedule();
     } else {
-	_task.reschedule();
 	remove_select(_fd, SELECT_WRITE);
     }
 }

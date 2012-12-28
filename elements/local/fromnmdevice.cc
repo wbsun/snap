@@ -15,6 +15,7 @@
 #include <click/userutils.hh>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sched.h>
 #include <click/master.hh>
 
 # include <sys/socket.h>
@@ -43,6 +44,7 @@ FromNMDevice::FromNMDevice()
     _test = false;
     _full_nm = true;
     _nm_fd = -1;
+    _fd_added = false;
 }
 
 FromNMDevice::~FromNMDevice()
@@ -118,8 +120,10 @@ FromNMDevice::initialize(ErrorHandler *errh)
     }
 
     ScheduleInfo::initialize_task(this, &_task, false, errh);
-    if (_fd >= 0 && !_full_nm)
+    if (_fd >= 0 /*&& !_full_nm*/) {
 	add_select(_fd, SELECT_READ);
+	_fd_added = true;
+    }
 
     if (!_sniffer)
 	if (KernelFilter::device_filter(_ifname, true, errh) < 0)
@@ -234,6 +238,12 @@ FromNMDevice::selected(int fd, int mask)
 	if (!_full_nm)
 	    _task.reschedule();	
     }
+
+    if (_full_nm && !(mask & NetmapInfo::FROM_NM)) {
+//	remove_select(_fd, SELECT_READ);
+//	_fd_added = false;
+	_task.reschedule();
+    }
 }
 
 bool
@@ -244,6 +254,10 @@ FromNMDevice::run_task(Task *)
 
     if (_full_nm) {
 	r = NetmapInfo::run_fd_poll(_nm_fd);
+
+	if (r<0)
+	    _task.fast_reschedule();
+	
 	if (!r)
 	    return true;
 	else

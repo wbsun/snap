@@ -444,6 +444,9 @@ static void *thread_driver(void *user_data)
 	    ErrorHandler::default_handler()->warning(
 		"Failed to pin thread %d to CPU %d",
 		thread->thread_id(), cpu);
+	} else {
+	    ErrorHandler::default_handler()->message(
+		"Thread %d pinned to CPU %d\n", thread->thread_id(), cpu);
 	}
     }
     
@@ -698,6 +701,8 @@ particular purpose.\n");
 
 	if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpumask) != 0) {
 	    errh->warning("Failed to set pin thread 0 at CPU 0\n");
+	} else {
+	    errh->message("Thread %d pinned to CPU %d\n", 0, 0);
 	}
     }
     // run driver

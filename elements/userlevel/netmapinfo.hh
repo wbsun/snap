@@ -59,7 +59,7 @@ public:
     static bool initialized;
     static bool need_consumer_locking;
 
-    enum { dev_rx = 0x1, dev_tx = 0x2 };
+    enum { dev_rx = 0x1, dev_tx = 0x2, FROM_NM = 0x1000 };
 
     static map<string, uint32_t> dev_dirs;
 

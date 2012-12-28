@@ -290,7 +290,7 @@ NetmapInfo::run_fd_poll(int idx)
     fds[0].events = (pfd->rxe?(POLLIN):0)|(pfd->txe?(POLLIN):0);
 
     if (!atomic_uint32_t::compare_and_swap(pfd->running, 0, 1))
-	return -1;
+	return 1;
 
     int i;
     int timeout = pfd->timeout;
@@ -308,9 +308,9 @@ NetmapInfo::run_fd_poll(int idx)
 	    }
 
 	    if (pfd->rxe && (fds[0].revents & POLLIN))
-		pfd->rxe->selected(pfd->fd, Element::SELECT_READ);
+		pfd->rxe->selected(pfd->fd, Element::SELECT_READ | FROM_NM);
 	    if (pfd->txe && (fds[0].revents & POLLOUT))
-		pfd->txe->selected(pfd->fd, Element::SELECT_WRITE);
+		pfd->txe->selected(pfd->fd, Element::SELECT_WRITE | FROM_NM);
 	}
     }
 

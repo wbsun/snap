@@ -58,6 +58,10 @@ private:
     int _count;
     int _drops;
 
+    int _forced_nr_pools;
+    bool _forced_alloc_locking;
+    bool _forced_free_locking;
+
 public:
     virtual PBatch *alloc_batch();
     virtual int kill_batch(PBatch *pb);
@@ -65,9 +69,11 @@ public:
 private:
     LFRing<PBatch*> *_pb_pools;
     volatile uint32_t *_pb_alloc_locks;
+    volatile uint32_t *_pb_free_locks;
     volatile uint32_t _exp_pb_lock;
     int _nr_pools;
     bool _need_alloc_locking;
+    bool _need_free_locking;
     int _nr_pre_alloc;
 
     // Call after configuration, need _mt_pushers, and other confs.
@@ -80,7 +86,7 @@ private:
     int init_batch_after_create(PBatch* pb);
 
     // Reset args after allocting a batch from pool.
-    int init_batch_after_recycle(PBatch* pb); 
+    inline int init_batch_after_recycle(PBatch* pb) { return 0; }
 
     // Clean up batch for recycling it.
     int finit_batch_for_recycle(PBatch *pb);
