@@ -52,6 +52,9 @@ class FromNMDevice : public Element { public:
     int _burst;
     int _datalink;
 
+    bool _full_nm;
+    int _nm_fd;
+
 #if HAVE_INT64_TYPES
     typedef uint64_t counter_t;
 #else

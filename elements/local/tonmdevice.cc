@@ -33,6 +33,8 @@ ToNMDevice::ToNMDevice()
     _fd = -1;
     _my_fd = false;
     _ringid = -1;
+    _full_nm = true;
+    _nm_fd = -1;
 }
 
 ToNMDevice::~ToNMDevice()
@@ -49,6 +51,7 @@ ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("DEBUG", _debug)
 	.read("BURST", _burst)
 	.read("RING", _ringid)
+	.read("FULL_NM", _full_nm)
 	.complete() < 0)
 	return -1;
     if (!_ifname)
@@ -93,12 +96,16 @@ ToNMDevice::initialize(ErrorHandler *errh)
 	    _fd = _netmap.open(_ifname, true, errh);
 	if (_fd >= 0) {
 	    _my_fd = true;
-	    add_select(_fd, SELECT_READ); // NB NOT writable!
+	    if (!_full_nm)
+		add_select(_fd, SELECT_READ); // NB NOT writable!
 	} else
 	    return -1;
     }
     if (_fd >= 0) {
 	_netmap.initialize_rings_tx();
+
+	if (_full_nm)
+	    _nm_fd = NetmapInfo::register_thread_poll(_fd, this, NetmapInfo::dev_tx);
     }
 
     // check for duplicate writers
@@ -108,13 +115,17 @@ ToNMDevice::initialize(ErrorHandler *errh)
     used = this;
 
     ScheduleInfo::join_scheduler(this, &_task, errh);
-    _signal = Notifier::upstream_empty_signal(this, 0, &_task);
+//    _signal = Notifier::upstream_empty_signal(this, 0, &_task);
     return 0;
 }
 
 void
 ToNMDevice::cleanup(CleanupStage)
 {
+    if (_full_nm && _nm_fd >= 0) {
+	NetmapInfo::poll_fds[_nm_fd]->running = 0;
+    }
+
     if (_fd >= 0 && _my_fd) {
 	_netmap.close(_fd);
 	_fd = -1;
@@ -147,12 +158,13 @@ ToNMDevice::netmap_send_packet(Packet *p)
 	ring->slot[cur].len = p_length;
 
 	// need this?
-	__asm__ volatile("" : : : "memory");
+//	__asm__ volatile("" : : : "memory");
 	ring->cur = NETMAP_RING_NEXT(ring, cur);
 	ring->avail--;
 	return 0;
     }
-    errno = ENOBUFS;
+    if (!_full_nm)
+	errno = ENOBUFS;
     return -1;
 }
 
@@ -180,12 +192,47 @@ ToNMDevice::send_packet(Packet *p)
 	return errno ? -errno : -EINVAL;
 }
 
-bool
-ToNMDevice::run_task(Task *)
+int
+ToNMDevice::send_packets_nm()
 {
     Packet *p = _q;
     _q = 0;
-    int count = 0, r = 0;
+    int count = 0, r=0;
+
+    do {
+	if (!p) {
+	    if (!(p = input(0).pull()))
+		break;
+	}
+	
+	if ((r = netmap_send_packet(p)) >= 0) {
+	    p->kill();
+	    p=0;
+	} else {
+	    _backoff = 1;
+	    _q = p;
+	    break;
+	}
+    } while (count < _burst);
+    
+    return 0;
+}
+
+bool
+ToNMDevice::run_task(Task *)
+{
+    int r = 0;
+    if (_full_nm) {
+	r = NetmapInfo::run_fd_poll(_nm_fd);
+	if (!r)
+	    return false;
+	else
+	    return true;
+    }
+    
+    Packet *p = _q;
+    _q = 0;
+    int count = 0;
 
     do {
 	if (!p) {
@@ -206,25 +253,29 @@ ToNMDevice::run_task(Task *)
 	assert(!_q);
 	_q = p;
 
-	if (!_backoff) {
-	    _backoff = 1;
-	    add_select(_fd, SELECT_WRITE);
-	} else {
-	    _timer.schedule_after(Timestamp::make_usec(_backoff));
-	    if (_backoff < 256)
-		_backoff *= 2;
-	    if (_debug) {
-		Timestamp now = Timestamp::now();
-		click_chatter("%p{element} backing off for %d at %p{timestamp}\n", this, _backoff, &now);
-	    }
+	if (!_full_nm) {
+	    if (!_backoff) {
+		_backoff = 1;
+		add_select(_fd, SELECT_WRITE);
+	    } else {
+		_timer.schedule_after(Timestamp::make_usec(_backoff));
+		if (_backoff < 256)
+		    _backoff *= 2;
+		if (_debug) {
+		    Timestamp now = Timestamp::now();
+		    click_chatter(
+			"%p{element} backing off for %d at %p{timestamp}\n", this, _backoff, &now);
+		}
+	    }		
 	}
+	
 	return count > 0;
     } else if (r < 0) {
 	click_chatter("ToNMDevice(%s): %s", _ifname.c_str(), strerror(-r));
 	checked_output_push(1, p);
     }
 
-    if (p || _signal)
+    if (p && !_full_nm)
 	_task.fast_reschedule();
     return count > 0;
 }
@@ -232,8 +283,12 @@ ToNMDevice::run_task(Task *)
 void
 ToNMDevice::selected(int, int)
 {
-    _task.reschedule();
-    remove_select(_fd, SELECT_WRITE);
+    if (_full_nm) {
+	send_packets_nm();
+    } else {
+	_task.reschedule();
+	remove_select(_fd, SELECT_WRITE);
+    }
 }
 
 

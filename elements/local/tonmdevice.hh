@@ -33,6 +33,7 @@ class ToNMDevice : public Element { public:
 	{ return _ringid; }
     bool run_task(Task *);
     void selected(int fd, int mask);
+    int send_packets_nm();  
 
   protected:
 
@@ -48,6 +49,9 @@ class ToNMDevice : public Element { public:
 
     Packet *_q;
     int _burst;
+
+    bool _full_nm;
+    int _nm_fd;
 
     bool _debug;
     bool _my_fd;

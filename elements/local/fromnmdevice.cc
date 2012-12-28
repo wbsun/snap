@@ -41,6 +41,8 @@ FromNMDevice::FromNMDevice()
     _fd = -1;
     _ringid = -1;
     _test = false;
+    _full_nm = true;
+    _nm_fd = -1;
 }
 
 FromNMDevice::~FromNMDevice()
@@ -74,6 +76,7 @@ FromNMDevice::configure(Vector<String> &conf,
 	.read("TIMESTAMP", timestamp)
 	.read("RING", _ringid)
 	.read("TEST", _test)
+	.read("FULL_NM", _full_nm)
 	.complete() < 0)
 	return -1;
     if (_snaplen > 8190 || _snaplen < 14)
@@ -109,10 +112,13 @@ FromNMDevice::initialize(ErrorHandler *errh)
 	_fd = _netmap.open(_ifname, true, errh);
     if (_fd >= 0) {
 	_netmap.initialize_rings_rx(0);//_timestamp);
+	if (_full_nm)
+	    _nm_fd = NetmapInfo::register_thread_poll(
+		_fd, this, NetmapInfo::dev_rx);
     }
 
     ScheduleInfo::initialize_task(this, &_task, false, errh);
-    if (_fd >= 0)
+    if (_fd >= 0 && !_full_nm)
 	add_select(_fd, SELECT_READ);
 
     if (!_sniffer)
@@ -126,6 +132,10 @@ FromNMDevice::initialize(ErrorHandler *errh)
 void
 FromNMDevice::cleanup(CleanupStage stage)
 {
+    if (_full_nm) {
+	NetmapInfo::poll_fds[_nm_fd]->running = 0;
+    }
+    
     if (stage >= CLEANUP_INITIALIZED && !_sniffer)
 	KernelFilter::device_filter(
 	    _ifname, false, ErrorHandler::default_handler());
@@ -215,13 +225,14 @@ FromNMDevice::netmap_dispatch()
 
 void
 FromNMDevice::selected(int fd, int mask)
-{
+{    
     if (! (mask & Element::SELECT_READ))
 	return;
     int r = netmap_dispatch();
     if (r > 0) {
 	_count += r;
-	_task.reschedule();
+	if (!_full_nm)
+	    _task.reschedule();	
     }
 }
 
@@ -230,13 +241,22 @@ FromNMDevice::run_task(Task *)
 {
     // Read and push() at most one burst of packets.
     int r = 0;
-    r = netmap_dispatch();
-    if (r > 0) {
-	_count += r;
-	_task.fast_reschedule();
-	return true;
-    } else
-	return false;
+
+    if (_full_nm) {
+	r = NetmapInfo::run_fd_poll(_nm_fd);
+	if (!r)
+	    return true;
+	else
+	    return false;
+    } else {
+	r = netmap_dispatch();
+	if (r > 0) {
+	    _count += r;	
+	    _task.fast_reschedule();
+	    return true;
+	} else
+	    return false;
+    }
 }
 
 String

@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 #include <fcntl.h>
+#include <sched.h>
 #if HAVE_EXECINFO_H
 # include <execinfo.h>
 #endif
@@ -74,6 +75,7 @@ CLICK_USING_DECLS
 #define THREADS_OPT		316
 #define SIMTIME_OPT		317
 #define SOCKET_OPT		318
+#define PIN_OPT                 319
 
 static const Clp_Option options[] = {
     { "allow-reconfigure", 'R', ALLOW_RECONFIG_OPT, 0, Clp_Negate },
@@ -89,6 +91,7 @@ static const Clp_Option options[] = {
     { "simtime", 0, SIMTIME_OPT, Clp_ValDouble, Clp_Optional },
     { "simulation-time", 0, SIMTIME_OPT, Clp_ValDouble, Clp_Optional },
     { "threads", 'j', THREADS_OPT, Clp_ValInt, 0 },
+    { "pin-threads", 'a', PIN_OPT, Clp_ValInt, 0 },
     { "time", 't', TIME_OPT, 0, 0 },
     { "unix-socket", 'u', UNIX_SOCKET_OPT, Clp_ValString, 0 },
     { "version", 'v', VERSION_OPT, 0, 0 },
@@ -121,6 +124,7 @@ Options:\n\
   -f, --file FILE               Read router configuration from FILE.\n\
   -e, --expression EXPR         Use EXPR as router configuration.\n\
   -j, --threads N               Start N threads (default 1).\n\
+  -a, --pin-threads 0/1         Pin threads to fixed CPUs.\n\ 
   -p, --port PORT               Listen for control connections on TCP port.\n\
   -u, --unix-socket FILE        Listen for control connections on Unix socket.\n\
       --socket FD               Add a file descriptor control connection.\n\
@@ -296,6 +300,7 @@ static Vector<String> cs_ports;
 static Vector<String> cs_sockets;
 static bool warnings = true;
 static int nthreads = 1;
+static int pin_threads = 0;
 
 static String
 click_driver_control_socket_name(int number)
@@ -428,6 +433,20 @@ extern "C" {
 static void *thread_driver(void *user_data)
 {
     RouterThread *thread = static_cast<RouterThread *>(user_data);
+    if (pin_threads) {
+	cpuset_t cpumask;
+	int cpu = thread->thread_id()%((int)sysconf(_SC_NPROCESSORS_ONLN));	
+
+	CPU_ZERO(&cpumask);
+	CPU_SET(cpu, &cpumask);
+
+	if (pthread_setaffinity_np(pthread_self(), sizeof(cpuset_t), &cpumask) != 0) {
+	    ErrorHandler::default_handler->warning(
+		"Failed to pin thread %d to CPU %d",
+		thread->thread_id(), cpu);
+	}
+    }
+    
     thread->driver();
     return 0;
 }
@@ -591,6 +610,11 @@ There is NO warranty, not even for merchantability or fitness for a\n\
 particular purpose.\n");
       return cleanup(clp, 0);
 
+    case PIN_OPT:
+	printf("Click will pin threads to CPUs\n");
+	pin_threads = clp->val.i;
+	break;
+
      bad_option:
      case Clp_BadOption:
       short_usage();
@@ -666,6 +690,16 @@ particular purpose.\n");
     }
 #endif
 
+    if (pin_threads) {
+	cpuset_t cpumask;
+
+	CPU_ZERO(&cpumask);
+	CPU_SET(0, &cpumask);
+
+	if (pthread_setaffinity_np(pthread_self(), sizeof(cpuset_t), &cpumask) != 0) {
+	    errh->warning("Failed to set pin thread 0 at CPU 0\n");
+	}
+    }
     // run driver
     router->master()->thread(0)->driver();
 

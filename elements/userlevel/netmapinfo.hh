@@ -12,6 +12,8 @@
 #include <click/glue.hh>
 #include <map>
 #include <string>
+#include <vector>
+#include <click/element.hh>
 using namespace std;
 
 CLICK_DECLS
@@ -149,6 +151,22 @@ public:
 	}
 	return rt;
     }
+
+    struct nmpollfd {
+	int fd;
+	int tid;
+	int timeout;
+	Element *rxe;
+	Element *txe;
+	int idx;
+	volatile uint32_t running;
+    };
+
+    static vector<nmpollfd*> poll_fds;
+
+    static int register_thread_poll(int fd, Element* e, uint32_t dir);
+
+    static int run_fd_poll(int idx);   
 
 };
 

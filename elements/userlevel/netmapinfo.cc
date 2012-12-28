@@ -25,6 +25,10 @@
 #include <click/sync.hh>
 #include <unistd.h>
 #include <fcntl.h>
+#include <click/hvputils.hh>
+#include <string.h>
+#include <errno.h>
+#include <poll.h>
 CLICK_DECLS
 
 static Spinlock netmap_memory_lock;
@@ -41,6 +45,8 @@ bool NetmapInfo::initialized = false;
 bool NetmapInfo::need_consumer_locking;
 map<string, uint32_t> NetmapInfo::dev_dirs;
 
+vector<nmpollfd*> NetmapInfo::poll_fds;
+
 int
 NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 {
@@ -50,6 +56,9 @@ NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
     }
 
     if (!initialized) {
+	poll_fds.clear();
+	poll_fds.reserve(64);
+	
 	nr_threads = nthreads;
 
 	if (nr_threads == 1 || nr_buf_consumers == 1)
@@ -232,6 +241,80 @@ NetmapInfo::ring::close(int fd)
     }
     netmap_memory_lock.release();
     ::close(fd);
+}
+
+int
+NetmapInfo::register_thread_poll(int fd, Element *e, uint32_t dir)
+{
+    for (int i=0; i<poll_fds.size(); i++) {
+	nmpollfd* pfd = poll_fds[i];
+
+	if (pfd->fd == fd) {
+	    assert(i == pfd->idx);
+	    
+	    if (dir & dev_rx)
+		pfd->rxe = e;
+	    else
+		pfd->txe = e;
+	    
+	    return pfd->idx;
+	}
+    }
+
+    nmpollfd *pfd = new nmpollfd();
+    pfd->fd = fd;
+    pfd->tid = -1;
+    pfd->timeout = 1000;
+    if (dir & dev_rx) {
+	pfd->rxe = e;
+	pfd->txe = 0;
+    }	    
+    else {
+	pfd->txe = e;
+	pfd->rxe = 0;
+    }
+    pfd->running = 0;
+    pfd->idx = poll_fds.size();
+    poll_fds.push_back(pfd);
+
+    return pfd->idx;    
+}
+
+int
+NetmapInfo::run_fd_poll(int idx)
+{
+    struct pollfd fds[1];
+    nmpollfd *pfd = poll_fds[idx];
+
+    fds[0].fd = pfd->fd;
+    fds[0].events = (pfd->rxe?(POLLIN):0)|(pfd->txe?(POLLIN):0);
+
+    if (!atomic_uint32_t::compare_and_swap(pfd->running, 0, 1))
+	return -1;
+
+    int i;
+    int timeout = pfd->timeout;
+    while (pfd->running) {
+	i = poll(fds, 1, timeout); 
+	if (i < 0) {
+	    hvp_chatter("Poll error %s\n", strerror(errno));
+	    return -1;
+	}
+
+	if (i>0) {
+	    if (fds[0].revents & POLLERR) {
+		hvp_chatter("Poll return events %d", fds[0].revents);
+		return -1;
+	    }
+
+	    if (pfd->rxe && (fds[0].revents & POLLIN))
+		pfd->rxe->selected(pfd->fd, Element::SELECT_READ);
+	    if (pfd->txe && (fds[0].revents & POLLOUT))
+		pfd->txe->selected(pfd->fd, Element::SELECT_WRITE);
+	}
+    }
+
+    return 0;
 }
 
 CLICK_ENDDECLS
