@@ -45,7 +45,7 @@ bool NetmapInfo::initialized = false;
 bool NetmapInfo::need_consumer_locking;
 map<string, uint32_t> NetmapInfo::dev_dirs;
 
-vector<nmpollfd*> NetmapInfo::poll_fds;
+vector<NetmapInfo::nmpollfd*> NetmapInfo::poll_fds;
 
 int
 NetmapInfo::initialize(int nthreads, ErrorHandler *errh)

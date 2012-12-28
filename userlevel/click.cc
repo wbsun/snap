@@ -434,14 +434,14 @@ static void *thread_driver(void *user_data)
 {
     RouterThread *thread = static_cast<RouterThread *>(user_data);
     if (pin_threads) {
-	cpuset_t cpumask;
+	cpu_set_t cpumask;
 	int cpu = thread->thread_id()%((int)sysconf(_SC_NPROCESSORS_ONLN));	
 
 	CPU_ZERO(&cpumask);
 	CPU_SET(cpu, &cpumask);
 
-	if (pthread_setaffinity_np(pthread_self(), sizeof(cpuset_t), &cpumask) != 0) {
-	    ErrorHandler::default_handler->warning(
+	if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpumask) != 0) {
+	    ErrorHandler::default_handler()->warning(
 		"Failed to pin thread %d to CPU %d",
 		thread->thread_id(), cpu);
 	}
@@ -691,12 +691,12 @@ particular purpose.\n");
 #endif
 
     if (pin_threads) {
-	cpuset_t cpumask;
+	cpu_set_t cpumask;
 
 	CPU_ZERO(&cpumask);
 	CPU_SET(0, &cpumask);
 
-	if (pthread_setaffinity_np(pthread_self(), sizeof(cpuset_t), &cpumask) != 0) {
+	if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpumask) != 0) {
 	    errh->warning("Failed to set pin thread 0 at CPU 0\n");
 	}
     }
