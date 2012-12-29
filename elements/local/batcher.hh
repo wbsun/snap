@@ -62,6 +62,8 @@ private:
     bool _forced_alloc_locking;
     bool _forced_free_locking;
 
+    bool _local_alloc;
+
 public:
     virtual PBatch *alloc_batch();
     virtual int kill_batch(PBatch *pb);

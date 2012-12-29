@@ -172,7 +172,8 @@ FromNMDevice::emit_packet(WritablePacket *p,
     else
 	checked_output_push(1, p);
 #endif
-    output(0).push(p);
+    if (!p)
+	output(0).push(p);
 }
 
 int
@@ -212,7 +213,7 @@ FromNMDevice::netmap_dispatch()
 		++ring->reserved;
 		--nzcopy;
 	    } else {
-		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
+		p = 0;// Packet::make(_headroom, buf, ring->slot[cur].len, 0);
 		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
 		ring->slot[res1idx].buf_idx = buf_idx;
 	    }

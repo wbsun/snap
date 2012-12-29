@@ -12,7 +12,7 @@ CLICK_DECLS
 
 // Bigger enough to hold batches.
 // Doesn't waste much memory, 8 bytes each item.
-#define CLICK_PBATCH_POOL_SIZE 16
+#define CLICK_PBATCH_POOL_SIZE 8
 
 Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
 {
@@ -41,6 +41,7 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _forced_alloc_locking = false;
     _forced_free_locking = false;
     _need_free_locking = false;
+    _local_alloc = false;
 }
 
 Batcher::~Batcher()
@@ -280,6 +281,8 @@ Batcher::alloc_batch()
 	
 	if (_need_alloc_locking) {
 	    // hvp_chatter("locking for pool alloc\n");
+	    if (_local_alloc && _pb_alloc_locks[i])
+		    continue;			    
 	    while(atomic_uint32_t::swap(_pb_alloc_locks[i], 1) == 1);
 	}
 
@@ -302,7 +305,7 @@ Batcher::alloc_batch()
     } else {
 	if (_test)
 	    hvp_chatter("Bad we have to create new batch...\n");
-	if (test_mode == test_mode3)
+	if (test_mode >= test_mode3)
 	    return 0;
 	pb = create_new_batch();
 	this->init_batch_after_create(pb);
@@ -434,6 +437,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "NR_POOLS", cpkN, cpInteger, &_forced_nr_pools,
 		     "ALLOC_LOCK", cpkN, cpBool, &_forced_alloc_locking,
 		     "FREE_LOCK", cpkN, cpBool, &_forced_free_locking,
+		     "LOCAL_ALLOC", cpkN, cpBool, &_local_alloc,
 		     cpEnd) < 0)
 	return -1;
 
