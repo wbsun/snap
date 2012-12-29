@@ -1,10 +1,10 @@
 #include <click/config.h>
-#include "bunqueue.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
 #include <click/confparse.hh>
 #include <click/timestamp.hh>
 #include <click/atomic.hh>
+#include "bunqueue.hh"
 CLICK_DECLS
 
 const int BUnqueue::DEFAULT_LEN = (int)(1<<3);
@@ -13,7 +13,7 @@ BUnqueue::BUnqueue()
 {
     _que_len = DEFAULT_LEN;
     _drops = 0;
-    _test = fasle;
+    _test = false;
     _q_prod_lock = 0;
     _q_cons_lock = 0;
 }

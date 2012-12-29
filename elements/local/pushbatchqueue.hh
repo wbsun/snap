@@ -31,6 +31,9 @@ public:
 
     static const int DEFAULT_LEN;
 private:
+
+    int check_batch();
+    
     int _que_len;
     LFRing<PBatch*> _que;
     Task _task;
