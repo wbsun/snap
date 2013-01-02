@@ -35,6 +35,7 @@ public:
     const char *class_name() const	{ return "Batcher"; }
     const char *port_count() const	{ return "1-/1"; }
     const char *processing() const  { return PUSH; }
+    int configure_phase() const { return CONFIGURE_PHASE_LAST; }
 
     void push(int i, Packet *p);
     int configure(Vector<String> &conf, ErrorHandler *errh);

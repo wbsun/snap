@@ -471,6 +471,8 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
     test_mode = _test%10;
     _test = _test/10;
 #endif
+
+    this->setup_all();
     
     return 0;
 }
@@ -480,7 +482,6 @@ Batcher::initialize(ErrorHandler *errh)
 {
     _timer.initialize(this);
 
-    this->setup_all();
     if (!init_pb_pool()) {
 	hvp_chatter("Batch pool initialized.\n");
     } else

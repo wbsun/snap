@@ -144,7 +144,7 @@ public:
     virtual int req_anno(uint8_t start, uint8_t len, uint8_t rw);
     virtual void setup_anno();
     virtual int8_t get_anno_offset(uint8_t start);
-
+    virtual uint8_t get_anno_stride() { return anno_len; }
     
     //
     // Memory management:
@@ -275,6 +275,54 @@ public:
     }
 
 public:
+    inline uint8_t* hslices() {
+	if (producer->slieces_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    host_mem,
+	    producer->slices_offset);
+    }
+
+    inline uint8_t* dslices() {
+	if (producer->slieces_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    dev_mem,
+	    producer->slices_offset);
+    }
+
+    inline uint8_t* hannos() {
+	if (producer->annos_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    host_mem,
+	    producer->annos_offset);
+    }
+
+    inline uint8_t* dannos() {
+	if (producer->annos_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    dev_mem,
+	    producer->annos_offset);
+    }
+
+    inline int16_t* hlens() {
+	if (producer->lens_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    host_mem,
+	    producer->lens_offset);
+    }
+
+    inline int16_t* dlens() {
+	if (producer->lenss_offset < 0)
+	    return 0;
+	return (uint8_t*)g4c_ptr_add(
+	    dev_mem,
+	    producer->lens_offset);
+    }
+    
     // Accessors:
     inline uint8_t* slice_hptr(int idx) {
 	if (producer->slices_offset < 0)

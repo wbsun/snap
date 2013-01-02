@@ -1,5 +1,5 @@
 #include <click/config.h>
-#include "tonmdevice.hh"
+#include "btonmdevice.hh"
 #include <click/error.hh>
 #include <click/etheraddress.hh>
 #include <click/args.hh>
@@ -27,7 +27,7 @@
 
 CLICK_DECLS
 
-ToNMDevice::ToNMDevice()
+BToNMDevice::BToNMDevice()
     : _task(this), _timer(&_task), _q(0), _pulls(0)
 {
     _fd = -1;
@@ -35,19 +35,25 @@ ToNMDevice::ToNMDevice()
     _ringid = -1;
     _full_nm = true;
     _nm_fd = -1;
+    _my_port = 0;
+    _nr_ports = 0;
+    _cur = 0;
+    _my_pkts = 0;
 }
 
-ToNMDevice::~ToNMDevice()
+BToNMDevice::~BToNMDevice()
 {
 }
 
 int
-ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
+BToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     _burst = 1;
     _ringid = -1;
     if (Args(conf, this, errh)
 	.read_mp("DEVNAME", _ifname)
+	.read_m("PORT", _my_port)
+	.read_m("NRPORTS", _nr_ports)
 	.read("DEBUG", _debug)
 	.read("BURST", _burst)
 	.read("RING", _ringid)
@@ -64,7 +70,7 @@ ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 FromNMDevice *
-ToNMDevice::find_fromnmdevice() const
+BToNMDevice::find_fromnmdevice() const
 {
     Router *r = router();
     for (int ei = 0; ei < r->nelements(); ++ei) {
@@ -79,7 +85,7 @@ ToNMDevice::find_fromnmdevice() const
 }
 
 int
-ToNMDevice::initialize(ErrorHandler *errh)
+BToNMDevice::initialize(ErrorHandler *errh)
 {
     _timer.initialize(this);
 
@@ -115,7 +121,6 @@ ToNMDevice::initialize(ErrorHandler *errh)
     if (used)
 	return errh->error("duplicate writer for device %<%s:%d%>",
 			   _ifname.c_str(), _ringid);
-    
     used = this;
 
     ScheduleInfo::join_scheduler(this, &_task, errh);
@@ -124,7 +129,7 @@ ToNMDevice::initialize(ErrorHandler *errh)
 }
 
 void
-ToNMDevice::cleanup(CleanupStage)
+BToNMDevice::cleanup(CleanupStage)
 {
     if (_full_nm && _nm_fd >= 0) {
 	NetmapInfo::poll_fds[_nm_fd]->running = 0;
@@ -138,7 +143,7 @@ ToNMDevice::cleanup(CleanupStage)
 
 
 int
-ToNMDevice::netmap_send_packet(Packet *p)
+BToNMDevice::netmap_send_packet(Packet *p)
 {
     for (unsigned ri = _netmap.ring_begin; ri != _netmap.ring_end; ++ri) {
 	struct netmap_ring *ring = NETMAP_TXRING(_netmap.nifp, ri);
@@ -183,7 +188,7 @@ ToNMDevice::netmap_send_packet(Packet *p)
  * --jbicket
  */
 int
-ToNMDevice::send_packet(Packet *p)
+BToNMDevice::send_packet(Packet *p)
 {
     int r = 0;
     errno = 0;
@@ -197,7 +202,7 @@ ToNMDevice::send_packet(Packet *p)
 }
 
 int
-ToNMDevice::send_packets_nm()
+BToNMDevice::send_packets_nm()
 {
     Packet *p = _q;
     _q = 0;
@@ -223,7 +228,7 @@ ToNMDevice::send_packets_nm()
 }
 
 bool
-ToNMDevice::run_task(Task *)
+BToNMDevice::run_task(Task *)
 {
     int r = 0;
     if (_full_nm) {
@@ -279,7 +284,7 @@ ToNMDevice::run_task(Task *)
 	
 	return count > 0;
     } else if (r < 0) {
-	click_chatter("ToNMDevice(%s): %s", _ifname.c_str(), strerror(-r));
+	click_chatter("BToNMDevice(%s): %s", _ifname.c_str(), strerror(-r));
 	checked_output_push(1, p);
     }
 
@@ -289,7 +294,7 @@ ToNMDevice::run_task(Task *)
 }
 
 void
-ToNMDevice::selected(int fd, int mask)
+BToNMDevice::selected(int fd, int mask)
 {
     if (_full_nm) {
 	send_packets_nm();
@@ -303,9 +308,9 @@ ToNMDevice::selected(int fd, int mask)
 
 
 String
-ToNMDevice::read_param(Element *e, void *thunk)
+BToNMDevice::read_param(Element *e, void *thunk)
 {
-    ToNMDevice *td = (ToNMDevice *)e;
+    BToNMDevice *td = (BToNMDevice *)e;
     switch((uintptr_t) thunk) {
     case h_debug:
 	return String(td->_debug);
@@ -321,10 +326,10 @@ ToNMDevice::read_param(Element *e, void *thunk)
 }
 
 int
-ToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
+BToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
 		     ErrorHandler *errh)
 {
-    ToNMDevice *td = (ToNMDevice *)e;
+    BToNMDevice *td = (BToNMDevice *)e;
     String s = cp_uncomment(in_s);
     switch ((intptr_t)vparam) {
     case h_debug: {
@@ -339,7 +344,7 @@ ToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
 }
 
 void
-ToNMDevice::add_handlers()
+BToNMDevice::add_handlers()
 {
     add_task_handlers(&_task);
     add_read_handler("debug", read_param, h_debug, Handler::CHECKBOX);
@@ -351,4 +356,4 @@ ToNMDevice::add_handlers()
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(FromNMDevice userlevel)
-EXPORT_ELEMENT(ToNMDevice)
+EXPORT_ELEMENT(BToNMDevice)
