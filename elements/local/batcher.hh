@@ -89,7 +89,10 @@ private:
     int init_batch_after_create(PBatch* pb);
 
     // Reset args after allocting a batch from pool.
-    inline int init_batch_after_recycle(PBatch* pb) { return 0; }
+    inline int init_batch_after_recycle(PBatch* pb) {
+	pb->shared = 1;
+	return 0;
+    }
 
     // Clean up batch for recycling it.
     int finit_batch_for_recycle(PBatch *pb);

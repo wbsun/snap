@@ -259,7 +259,7 @@ public:
     void *dwork_ptr;
     int work_size;
 
-    int shared;
+    volatile uint32_t shared;
 
     void *priv_data;
 

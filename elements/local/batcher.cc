@@ -301,7 +301,7 @@ Batcher::alloc_batch()
 	if (_test) {
 	    hvp_chatter("reuse batch %p\n", pb);
 	}
-	;//this->init_batch_after_recycle(pb);
+	this->init_batch_after_recycle(pb);
     } else {
 	if (_test)
 	    hvp_chatter("Bad we have to create new batch...\n");
@@ -321,8 +321,7 @@ Batcher::alloc_batch()
 int
 Batcher::kill_batch(PBatch *pb)
 {
-    pb->shared--;
-    if (pb->shared < 0)
+    if (atomic_uint32_t::dec_and_test(pb->shared))
     {
 	this->finit_batch_for_recycle(pb);
 	if (this->recycle_batch(pb) == false) {
