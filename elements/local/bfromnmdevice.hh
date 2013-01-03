@@ -1,5 +1,5 @@
-#ifndef CLICK_FROMNMDEVICE_HH
-#define CLICK_FROMNMDEVICE_HH
+#ifndef CLICK_BFROMNMDEVICE_HH
+#define CLICK_BFROMNMDEVICE_HH
 #include <click/element.hh>
 #include "elements/userlevel/kernelfilter.hh"
 #include "elements/userlevel/netmapinfo.hh"
