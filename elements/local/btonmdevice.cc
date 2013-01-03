@@ -204,7 +204,7 @@ BToNMDevice::send_packet(Packet *p)
 int
 BToNMDevice::send_packets_nm()
 {
-    Packet *p = _q;
+    PBatch *p = _q;
     _q = 0;
     int count = 0, r=0;
 

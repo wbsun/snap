@@ -276,7 +276,7 @@ public:
 
 public:
     inline uint8_t* hslices() {
-	if (producer->slieces_offset < 0)
+	if (producer->slices_offset < 0)
 	    return 0;
 	return (uint8_t*)g4c_ptr_add(
 	    host_mem,
@@ -284,7 +284,7 @@ public:
     }
 
     inline uint8_t* dslices() {
-	if (producer->slieces_offset < 0)
+	if (producer->slices_offset < 0)
 	    return 0;
 	return (uint8_t*)g4c_ptr_add(
 	    dev_mem,
@@ -310,15 +310,15 @@ public:
     inline int16_t* hlens() {
 	if (producer->lens_offset < 0)
 	    return 0;
-	return (uint8_t*)g4c_ptr_add(
+	return (int16_t*)g4c_ptr_add(
 	    host_mem,
 	    producer->lens_offset);
     }
 
     inline int16_t* dlens() {
-	if (producer->lenss_offset < 0)
+	if (producer->lens_offset < 0)
 	    return 0;
-	return (uint8_t*)g4c_ptr_add(
+	return (int16_t*)g4c_ptr_add(
 	    dev_mem,
 	    producer->lens_offset);
     }
