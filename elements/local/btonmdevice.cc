@@ -39,6 +39,7 @@ BToNMDevice::BToNMDevice()
     _nr_ports = 0;
     _cur = 0;
     _my_pkts = 0;
+    _debug = false;
 }
 
 BToNMDevice::~BToNMDevice()
