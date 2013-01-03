@@ -55,7 +55,7 @@ class BToNMDevice : public Element { public:
     int _my_pkts;
     int _burst;
 
-    bool _full_nm;
+    int _full_nm;
     int _nm_fd;
 
     bool _debug;

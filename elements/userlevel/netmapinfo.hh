@@ -166,7 +166,7 @@ public:
 
     static int register_thread_poll(int fd, Element* e, uint32_t dir);
 
-    static int run_fd_poll(int idx);   
+    static int run_fd_poll(int idx, int times=0);   
 
 };
 

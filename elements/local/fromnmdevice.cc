@@ -42,7 +42,7 @@ FromNMDevice::FromNMDevice()
     _fd = -1;
     _ringid = -1;
     _test = false;
-    _full_nm = true;
+    _full_nm = 1;
     _nm_fd = -1;
     _fd_added = false;
 }
@@ -119,10 +119,13 @@ FromNMDevice::initialize(ErrorHandler *errh)
 		_fd, this, NetmapInfo::dev_rx);
     }
 
-    ScheduleInfo::initialize_task(this, &_task, false, errh);
-    if (_fd >= 0 /*&& !_full_nm*/) {
-	add_select(_fd, SELECT_READ);
-	_fd_added = true;
+    if (_fd >= 0) {
+	if (!_full_nm) {
+	    ScheduleInfo::initialize_task(this, &_task, false, errh);
+	    add_select(_fd, SELECT_READ);
+	    _fd_added = true;
+	} else
+	    ScheduleInfo::initialize_task(this, &_task, true, errh);
     }
 
     if (!_sniffer)
@@ -239,12 +242,6 @@ FromNMDevice::selected(int fd, int mask)
 	if (!_full_nm)
 	    _task.reschedule();	
     }
-
-    if (_full_nm && !(mask & NetmapInfo::FROM_NM)) {
-//	remove_select(_fd, SELECT_READ);
-//	_fd_added = false;
-	_task.reschedule();
-    }
 }
 
 bool
@@ -254,13 +251,12 @@ FromNMDevice::run_task(Task *)
     int r = 0;
 
     if (_full_nm) {
-	r = NetmapInfo::run_fd_poll(_nm_fd);
+	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
-	if (r<0)
+	if (r>0) {
 	    _task.fast_reschedule();
-	
-	if (!r)
 	    return true;
+	}
 	else
 	    return false;
     } else {

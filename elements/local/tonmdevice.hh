@@ -50,7 +50,7 @@ class ToNMDevice : public Element { public:
     Packet *_q;
     int _burst;
 
-    bool _full_nm;
+    int _full_nm;
     int _nm_fd;
 
     bool _debug;

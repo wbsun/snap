@@ -33,7 +33,7 @@ ToNMDevice::ToNMDevice()
     _fd = -1;
     _my_fd = false;
     _ringid = -1;
-    _full_nm = true;
+    _full_nm = 1;
     _nm_fd = -1;
 }
 
@@ -96,8 +96,8 @@ ToNMDevice::initialize(ErrorHandler *errh)
 	    _fd = _netmap.open(_ifname, true, errh);
 	if (_fd >= 0) {
 	    _my_fd = true;
-//	    if (!_full_nm)
-	    add_select(_fd, SELECT_READ); // NB NOT writable!
+	    if (!_full_nm)
+		add_select(_fd, SELECT_READ); // NB NOT writable!
 	} else
 	    return -1;
     }
@@ -227,15 +227,14 @@ ToNMDevice::run_task(Task *)
 {
     int r = 0;
     if (_full_nm) {
-	r = NetmapInfo::run_fd_poll(_nm_fd);
+	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
-	if (r < 0)
+	if (r > 0) {
 	    _task.fast_reschedule();
-
-	if (!r)
-	    return false;
-	else
 	    return true;
+	}
+	else
+	    return false;
     }
     
     Packet *p = _q;
@@ -261,22 +260,20 @@ ToNMDevice::run_task(Task *)
 	assert(!_q);
 	_q = p;
 
-	if (!_full_nm) {
-	    if (!_backoff) {
-		_backoff = 1;
-		add_select(_fd, SELECT_WRITE);
-	    } else {
-		_timer.schedule_after(Timestamp::make_usec(_backoff));
-		if (_backoff < 256)
-		    _backoff *= 2;
-		if (_debug) {
-		    Timestamp now = Timestamp::now();
-		    click_chatter(
-			"%p{element} backing off for %d at %p{timestamp}\n", this, _backoff, &now);
-		}
-	    }		
-	}
-	
+	if (!_backoff) {
+	    _backoff = 1;
+	    add_select(_fd, SELECT_WRITE);
+	} else {
+	    _timer.schedule_after(Timestamp::make_usec(_backoff));
+	    if (_backoff < 256)
+		_backoff *= 2;
+	    if (_debug) {
+		Timestamp now = Timestamp::now();
+		click_chatter(
+		    "%p{element} backing off for %d at %p{timestamp}\n", this, _backoff, &now);
+	    }
+	}		
+		
 	return count > 0;
     } else if (r < 0) {
 	click_chatter("ToNMDevice(%s): %s", _ifname.c_str(), strerror(-r));
@@ -292,12 +289,10 @@ void
 ToNMDevice::selected(int fd, int mask)
 {
     if (_full_nm) {
-	send_packets_nm();
-	
-	if (!(mask & NetmapInfo::FROM_NM))
-	    _task.reschedule();
+	send_packets_nm();	
     } else {
 	remove_select(_fd, SELECT_WRITE);
+	_task.fast_reschedule();
     }
 }
 

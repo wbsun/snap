@@ -281,7 +281,7 @@ NetmapInfo::register_thread_poll(int fd, Element *e, uint32_t dir)
 }
 
 int
-NetmapInfo::run_fd_poll(int idx)
+NetmapInfo::run_fd_poll(int idx, int times)
 {
     struct pollfd fds[1];
     nmpollfd *pfd = poll_fds[idx];
@@ -311,6 +311,14 @@ NetmapInfo::run_fd_poll(int idx)
 		pfd->rxe->selected(pfd->fd, Element::SELECT_READ | FROM_NM);
 	    if (pfd->txe && (fds[0].revents & POLLOUT))
 		pfd->txe->selected(pfd->fd, Element::SELECT_WRITE | FROM_NM);
+	}
+
+	if (times > 0) {
+	    --times;
+	    if (times <= 0) {
+		atomic_uint32_t::swap(pfd->running, 0);
+		return 2;
+	    }
 	}
     }
 
