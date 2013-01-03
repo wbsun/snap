@@ -394,7 +394,7 @@ PBatch::init()
     hwork_ptr = 0;
     dwork_ptr = 0;
     work_size = 0;
-    shared = 0;
+    shared = 1;
     priv_data = 0;
     
     pptrs = new Packet*[producer->batch_size];
