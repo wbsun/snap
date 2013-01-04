@@ -72,7 +72,7 @@ NetmapInfo::alloc_extra_bufs(int fd)
 		// assert(!buf_pools[i].full());
 		buf_pools[i].add_new(buf);
 	    }
-	    if (r%10==0) // Give us some hope, ioctl is slow..
+	    if (b%10==0) // Give us some hope, ioctl is slow..
 		click_chatter("pool %d, %d sets nm exbufs done\n",
 			      i, b);
 	}
