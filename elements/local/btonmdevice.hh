@@ -62,6 +62,7 @@ class BToNMDevice : public Element { public:
     bool _my_fd;
     int _backoff;
     int _pulls;
+    bool _test;
 
     enum { h_debug, h_signal, h_pulls, h_q };
     FromNMDevice *find_fromnmdevice() const;

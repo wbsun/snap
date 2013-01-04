@@ -175,7 +175,7 @@ FromNMDevice::emit_packet(WritablePacket *p,
     else
 	checked_output_push(1, p);
 #endif
-    if (!p)
+    if (p)
 	output(0).push(p);
 }
 
@@ -193,19 +193,21 @@ FromNMDevice::netmap_dispatch()
 			  ring->num_slots, ring->avail,
 			  ri,
 			  ring->reserved);
-	
-	NetmapInfo::refill(ring);
 
+	NetmapInfo::refill(ring);
 	if (unlikely(_test))
-	    click_chatter("netmap ring %u slots, av %u, rings %u, resv %u",
+	    click_chatter("after refill: "
+			  "netmap ring %u slots, av %u, ring %u, resv %u",
 			  ring->num_slots, ring->avail,
-			  _netmap.ring_end - _netmap.ring_begin,
+			  ri,
 			  ring->reserved);
 
-	if (ring->avail == 0)
+	if (ring->avail == 0) {
 	    continue;
+	}
+	
 
-	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
+	//int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 
 	while (n != _burst &&
 	       ring->avail > 0) {
@@ -217,17 +219,17 @@ FromNMDevice::netmap_dispatch()
 		(unsigned char *) NETMAP_BUF(ring, buf_idx);
 
 	    WritablePacket *p;
-	    if (nzcopy > 0) {
+	    //if (nzcopy > 0) {
 		p = Packet::make(buf,
 				 ring->slot[cur].len,
 				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
-		--nzcopy;
-	    } else {
-		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
-		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
-		ring->slot[res1idx].buf_idx = buf_idx;
-	    }
+		//	--nzcopy;
+	    // } else {
+		// p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
+		// unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
+		// ring->slot[res1idx].buf_idx = buf_idx;
+	    // }
 
 	    ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 	    --ring->avail;
@@ -236,6 +238,14 @@ FromNMDevice::netmap_dispatch()
 	    if (p)
 		emit_packet(p, 0, ring->ts);
 	}
+
+	NetmapInfo::refill(ring);
+	if (unlikely(_test))
+	    click_chatter("after emit refill: "
+			  "netmap ring %u slots, av %u, ring %u, resv %u",
+			  ring->num_slots, ring->avail,
+			  ri,
+			  ring->reserved);	
     }
     return n;
 }
@@ -260,7 +270,7 @@ FromNMDevice::run_task(Task *)
     int r = 0;
 
     if (_full_nm) {
-	click_chatter("run task of fromnmdev\n");
+	click_chatter("run task of fromnmdev t %d\n", click_current_thread_id);
 	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
 	if (r>0) {

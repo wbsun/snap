@@ -79,6 +79,8 @@ private:
     bool _need_free_locking;
     int _nr_pre_alloc;
 
+    int _batch_pool_size;
+
     // Call after configuration, need _mt_pushers, and other confs.
     int init_pb_pool();
 

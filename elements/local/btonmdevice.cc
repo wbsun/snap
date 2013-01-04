@@ -40,6 +40,7 @@ BToNMDevice::BToNMDevice()
     _cur = 0;
     _my_pkts = 0;
     _debug = false;
+    _test = false;
 }
 
 BToNMDevice::~BToNMDevice()
@@ -59,6 +60,7 @@ BToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("BURST", _burst)
 	.read("RING", _ringid)
 	.read("FULL_NM", _full_nm)
+	.read("TEST", _test)
 	.complete() < 0)
 	return -1;
     if (!_ifname)
@@ -183,7 +185,7 @@ BToNMDevice::netmap_send_batch(PBatch *pb, int from)
 	return i;
     
     for (unsigned ri = _netmap.ring_begin;
-	 ri != _netmap.ring_end && !p;
+	 ri != _netmap.ring_end && p;
 	 ++ri)
     {
 	struct netmap_ring *ring = NETMAP_TXRING(_netmap.nifp, ri);
@@ -239,8 +241,11 @@ BToNMDevice::send_packets_nm()
 	
 	if ((_cur = netmap_send_batch(p, _cur)) >= p->npkts) {
 	    p->kill();
+	    if (_test)
+		click_chatter("sent %p %d\n", p, count);
 	    p=0;
 	    ++count;
+	    _cur = 0;
 	} else {
 	    _backoff = 1;
 	    _q = p;
@@ -256,7 +261,7 @@ BToNMDevice::run_task(Task *)
 {
     int r = 0;
     if (_full_nm) {
-	click_chatter("run task of btonmdv\n");
+	click_chatter("run task of btonmdv t %d\n", click_current_thread_id);
 	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
 	if (r > 0) {

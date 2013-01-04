@@ -167,8 +167,11 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 	! (ite->second & NetmapInfo::dev_tx)) {
 	req.nr_ringid |= NETMAP_NO_TX_POLL;
 	dirs = NetmapInfo::dev_rx;
-    } else
+	errh->message("Netmap dev %s open with RX\n", ifname.c_str());
+    } else {
 	dirs = NetmapInfo::dev_rx | NetmapInfo::dev_tx;
+	errh->message("Netmap dev %s open with RX and TX\n", ifname.c_str());
+    }
 
     if ((r = ioctl(fd, NIOCREGIF, &req))) {
 	errh->error("netmap register %s: %s",
@@ -287,7 +290,7 @@ NetmapInfo::run_fd_poll(int idx, int times)
     nmpollfd *pfd = poll_fds[idx];
 
     fds[0].fd = pfd->fd;
-    fds[0].events = (pfd->rxe?(POLLIN):0)|(pfd->txe?(POLLIN):0);
+    fds[0].events = (pfd->rxe?(POLLIN):0)|(pfd->txe?(POLLOUT):0);
 
     if (!atomic_uint32_t::compare_and_swap(pfd->running, 0, 1))
 	return 1;
