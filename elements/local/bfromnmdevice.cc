@@ -56,6 +56,7 @@ BFromNMDevice::configure(Vector<String> &conf,
 			ErrorHandler *errh)
 {
     bool timestamp = false;
+    int nmexbuf = 0;
 
     _headroom = Packet::default_headroom;
     _headroom += (4 - (_headroom + 2) % 4) % 4; // default 4/2 alignment
@@ -73,6 +74,7 @@ BFromNMDevice::configure(Vector<String> &conf,
 	.read("RING", _ringid)
 	.read("TEST", _test)
 	.read("FULL_NM", _full_nm)
+	.read("NMEXBUF", nmexbuf)
 	.complete() < 0)
 	return -1;
 
@@ -82,6 +84,9 @@ BFromNMDevice::configure(Vector<String> &conf,
 	return errh->error("BURST out of range");
 
     _timestamp = timestamp;
+    
+    if (nmexbuf > 0)
+	NetmapInfo::nr_extra_bufs = nmexbuf;
 
     NetmapInfo::register_buf_consumer();
     NetmapInfo::set_dev_dir(_ifname.c_str(),

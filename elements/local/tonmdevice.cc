@@ -44,6 +44,8 @@ ToNMDevice::~ToNMDevice()
 int
 ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+    int nmexbuf = 0;
+    
     _burst = 1;
     _ringid = -1;
     if (Args(conf, this, errh)
@@ -52,12 +54,16 @@ ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("BURST", _burst)
 	.read("RING", _ringid)
 	.read("FULL_NM", _full_nm)
+	.read("NMEXBUF", nmexbuf)
 	.complete() < 0)
 	return -1;
     if (!_ifname)
 	return errh->error("interface not set");
     if (_burst <= 0)
 	return errh->error("bad BURST");
+
+    if (nmexbuf > 0)
+	NetmapInfo::nr_extra_bufs = nmexbuf;
 
     NetmapInfo::set_dev_dir(_ifname.c_str(), NetmapInfo::dev_tx);
     return 0;

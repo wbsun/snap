@@ -19,7 +19,7 @@ using namespace std;
 CLICK_DECLS
 
 #ifndef NM_BUF_SLOTS
-#define NM_BUF_SLOTS (1<<17)
+#define NM_BUF_SLOTS (1<<19)
 #endif
 
 class NetmapInfo {
@@ -58,6 +58,12 @@ public:
     static int nr_threads;
     static bool initialized;
     static bool need_consumer_locking;
+
+    static int nr_extra_bufs;
+    static ssize_t __buf_start;
+    static uint16_t __nr_buf_size;
+    static void alloc_extra_bufs(int fd);
+    static void free_extra_bufs(int fd);
 
     enum { dev_rx = 0x1, dev_tx = 0x2, FROM_NM = 0x1000 };
 

@@ -47,6 +47,54 @@ map<string, uint32_t> NetmapInfo::dev_dirs;
 
 vector<NetmapInfo::nmpollfd*> NetmapInfo::poll_fds;
 
+int NetmapInfo::nr_extra_bufs = 0;
+ssize_t NetmapInfo::__buf_start = 0;
+uint16_t NetmapInfo::__nr_buf_size = 2048;
+
+void
+NetmapInfo::alloc_extra_bufs(int fd)
+{
+    int nr_buf_pp = nr_extra_bufs/nr_threads;
+
+    for (int i=0; i<nr_threads; i++) {
+	int idx;
+	for (int b=0; b<nr_buf_pp; b++) {
+	    int r = ioctl(fd, NIOCALLOCBUF, &idx);
+	    if (r) {
+		ErrorHandler::default_handler()->error(
+		    "netmap alloc extra buf: %s",
+		    strerror(errno));
+		return;
+	    }
+	    unsigned char *buf = (unsigned char*)(__buf_start + idx*__nr_buf_size);
+	    assert(!buf_pools[i].full());
+	    buf_pools[i].add_new(buf);
+	}
+    }
+}
+
+void
+NetmapInfo::free_extra_bufs(int fd)
+{
+    //if (nr_extra_bufs <= 0)
+	return;
+    
+    for (int i=0; i<nr_threads; i++) {
+	int idx;
+	while(!buf_pools[i].empty()) {
+	    unsigned char *buf = buf_pools[i].remove_and_get_oldest();
+	    idx = (buf - ((unsigned char*)(__buf_start)))/__nr_buf_size;
+	    int r = ioctl(fd, NIOCFREEBUF, &idx);
+	    if (r) {
+		ErrorHandler::default_handler()->error(
+		    "netmap free extra buf: %s",
+		    strerror(errno));
+		return;
+	    }
+	}
+    }
+}
+
 int
 NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 {
@@ -179,16 +227,28 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 	goto error;
     }
 
-
     nifp = NETMAP_IF(mem, req.nr_offset);
 
-    if (ringid < 0)
+    struct netmap_ring *sample_ring;
+
+    if (ringid < 0) {
 	per_ring = false;
+	ring = NETMAP_RXRING(nifp, 0);
+    }
     else {
 	per_ring = true;
 	ring_begin = ringid;
 	ring_end = ringid+1;
+	ring = NETMAP_RXRING(nifp, ring_begin);
     }
+
+    netmap_memory_lock.acquire();
+    if (NetmapInfo::__buf_start == 0) {
+	NetmapInfo::__buf_start = (ssize_t)((char*)(ring) + ring->buf_ofs);
+	NetmapInfo::__nr_buf_size = ring->nr_buf_size;
+	NetmapInfo::alloc_extra_bufs(fd);
+    }
+    netmap_memory_lock.release();
 		      
     return fd;
 }
@@ -241,6 +301,7 @@ NetmapInfo::ring::close(int fd)
     if (--netmap_memory_users <= 0 && netmap_memory != MAP_FAILED) {
 	munmap(netmap_memory, netmap_memory_size);
 	netmap_memory = MAP_FAILED;
+	NetmapInfo::free_extra_bufs(fd);	    
     }
     netmap_memory_lock.release();
     ::close(fd);

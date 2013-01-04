@@ -65,6 +65,9 @@ FromNMDevice::configure(Vector<String> &conf,
     _ringid = -1;
     String encap_type;
     bool has_encap;
+
+    int _nm_exbuf = 0;
+    
     if (Args(conf, this, errh)
 	.read_mp("DEVNAME", _ifname)
 	.read_p("PROMISC", promisc)
@@ -79,6 +82,7 @@ FromNMDevice::configure(Vector<String> &conf,
 	.read("RING", _ringid)
 	.read("TEST", _test)
 	.read("FULL_NM", _full_nm)
+	.read("NMEXBUF", _nm_exbuf)
 	.complete() < 0)
 	return -1;
     if (_snaplen > 8190 || _snaplen < 14)
@@ -92,6 +96,9 @@ FromNMDevice::configure(Vector<String> &conf,
     _promisc = promisc;
     _outbound = outbound;
     _timestamp = timestamp;
+
+    if (_nm_exbuf > 0)
+	NetmapInfo::nr_extra_bufs = _nm_exbuf;
 
     NetmapInfo::register_buf_consumer();
     NetmapInfo::set_dev_dir(_ifname.c_str(),
