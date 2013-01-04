@@ -183,6 +183,7 @@ int
 FromNMDevice::netmap_dispatch()
 {
     int n = 0;
+    uint32_t oldres;
     for (unsigned ri = _netmap.ring_begin;
 	 ri != _netmap.ring_end; ++ri) {
 	struct netmap_ring *ring = NETMAP_RXRING(_netmap.nifp, ri);
@@ -193,6 +194,7 @@ FromNMDevice::netmap_dispatch()
 			  ring->num_slots, ring->avail,
 			  ri,
 			  ring->reserved);
+//	oldres = ring->reserved;
 
 	NetmapInfo::refill(ring);
 	if (unlikely(_test))
@@ -201,11 +203,13 @@ FromNMDevice::netmap_dispatch()
 			  ring->num_slots, ring->avail,
 			  ri,
 			  ring->reserved);
+//	if (oldres && oldres == ring->reserved)
+	    // click_chatter("no netmap buffer available for ring %d, av %u, res %u",
+			  // ri, ring->avail, ring->reserved);
 
 	if (ring->avail == 0) {
 	    continue;
-	}
-	
+	}	
 
 	//int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 

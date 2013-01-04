@@ -121,7 +121,10 @@ public:
 	for (int j=0; j<nr_threads && ring->reserved > 0; ++j)
 	{
 	    i =  (tid+j)%nr_threads;
-	    
+
+/*	    if (j>0)
+		click_chatter("refill from other threads, t %d\n", tid);
+*/	    
 	    if (need_consumer_locking)
 	    {
 		while(atomic_uint32_t::swap(buf_consumer_locks[i], 1) == 1);

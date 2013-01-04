@@ -189,33 +189,34 @@ BToNMDevice::netmap_send_batch(PBatch *pb, int from)
 	 ++ri)
     {
 	struct netmap_ring *ring = NETMAP_TXRING(_netmap.nifp, ri);
-	if (ring->avail == 0)
-	    continue;
-	unsigned cur = ring->cur;
-	unsigned buf_idx = ring->slot[cur].buf_idx;
-	if (buf_idx < 2)
-	    continue;
-	unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
-	uint32_t p_length = p->length();
-	if (NetmapInfo::is_netmap_buffer(p)
-	    && !p->shared() /* A little risk: && p->buffer() == p->data() */
-	    ) {
-	    ring->slot[cur].buf_idx = NETMAP_BUF_IDX(ring, (char *) p->buffer());
-	    ring->slot[cur].flags |= NS_BUF_CHANGED;
-	    NetmapInfo::buffer_destructor(buf, 0);
-	    p->reset_buffer();
-	} else
-	    memcpy(buf, p->data(), p_length);
-	ring->slot[cur].len = p_length;
 
-	// need this?
+	while (p && ring->avail > 0) {
+	    unsigned cur = ring->cur;
+	    unsigned buf_idx = ring->slot[cur].buf_idx;
+	    if (buf_idx < 2)
+		continue;
+	    unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
+	    uint32_t p_length = p->length();
+	    if (NetmapInfo::is_netmap_buffer(p)
+		&& !p->shared() /* A little risk: && p->buffer() == p->data() */
+		) {
+		ring->slot[cur].buf_idx = NETMAP_BUF_IDX(ring, (char *) p->buffer());
+		ring->slot[cur].flags |= NS_BUF_CHANGED;
+		NetmapInfo::buffer_destructor(buf, 0);
+		p->reset_buffer();
+	    } else
+		memcpy(buf, p->data(), p_length);
+	    ring->slot[cur].len = p_length;
+	    
+	    // need this?
 //	__asm__ volatile("" : : : "memory");
-	ring->cur = NETMAP_RING_NEXT(ring, cur);
-	ring->avail--;
-	_my_pkts++;
-	i++;
+	    ring->cur = NETMAP_RING_NEXT(ring, cur);
+	    ring->avail--;
+	    _my_pkts++;
+	    i++;
 
-	__pbatch_next_pkt(i, pb, _my_port, dport, p);
+	    __pbatch_next_pkt(i, pb, _my_port, dport, p);
+	}
     }    
     
     if (!_full_nm && i < pb->npkts)
@@ -233,21 +234,22 @@ BToNMDevice::send_packets_nm()
 
     do {
 	if (!p) {
-	    if (!(p = input(0).bpull()))
+	    _cur = 0;
+	    while (!(p = input(0).bpull()) && (++_cur < 10000));
+	    if (!p) {
+		_cur = 0;
 		break;
+	    }
 	    _cur = 0;
 	    _my_pkts = 0;
 	}
 	
 	if ((_cur = netmap_send_batch(p, _cur)) >= p->npkts) {
 	    p->kill();
-	    if (_test)
-		click_chatter("sent %p %d\n", p, count);
 	    p=0;
 	    ++count;
 	    _cur = 0;
 	} else {
-	    _backoff = 1;
 	    _q = p;
 	    break;
 	}
