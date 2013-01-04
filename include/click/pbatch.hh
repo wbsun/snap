@@ -88,7 +88,7 @@ public:
 #endif
     }
     
-    enum {test_mode1 = 2, test_mode2, test_mode3};
+    enum {test_mode1 = 2, test_mode2=3, test_mode3=4};
 #ifndef CLICK_NO_BATCH_TEST    
     int test_mode;
 #endif

@@ -98,7 +98,7 @@ GPURuntime::configure(Vector<String> &conf, ErrorHandler* errh)
 		return -1;
 	    }
 	} else {
-	    if (!cp_string(g4c_args[i], s)) {
+	    if (!cp_string(g4c_args[i], &s)) {
 		errh->error("Format error: %s should be string", g4c_args[i].c_str());
 		return -1;
 	    }

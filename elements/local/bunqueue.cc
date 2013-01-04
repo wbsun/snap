@@ -81,16 +81,20 @@ BUnqueue::bpush(int i, PBatch *pb)
     
     if (unlikely(_que.full())) {
 	_drops += pb->npkts;
+
+	if (_test)
+	    hvp_chatter("batch %p killed\n", pb);
+
 	pb->kill();
-    } else
+    } else {
 	_que.add_new(pb);
+	    if (_test)
+		hvp_chatter("new batch %p added stream %d.\n",
+			    pb, pb->dev_stream);
+    }
 
 //     click_compiler_fence();
-    // _q_prod_lock = 0;
-    
-    if (_test)
-	hvp_chatter("new batch %p added stream %d.\n",
-		    pb, pb->dev_stream);
+    // _q_prod_lock = 0;    
 }
 
 PBatch *
@@ -122,10 +126,10 @@ BUnqueue::bpull(int port)
 			    Timestamp::now().unparse().c_str());
 	    return pb;
 	} else {
-	    _que.remove_oldest();
+	    //_que.remove_oldest();
 // 	    click_compiler_fence();
 	    // _q_cons_lock = 0;
-	    pb->kill();
+	    //pb->kill();
 	    return 0;
 	}
     }

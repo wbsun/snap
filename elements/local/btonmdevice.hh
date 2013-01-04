@@ -46,7 +46,7 @@ class BToNMDevice : public Element { public:
     int _nr_ports;
     int _fd;
     NetmapInfo::ring _netmap;
-    int netmap_send_packet(Packet *p);
+    int netmap_send_batch(PBatch *p, int cur);
     int _ringid;
     NotifierSignal _signal;
 
@@ -65,7 +65,7 @@ class BToNMDevice : public Element { public:
 
     enum { h_debug, h_signal, h_pulls, h_q };
     FromNMDevice *find_fromnmdevice() const;
-    int send_packet(Packet *p);
+//    int send_packet(Packet *p);
     static int write_param(
 	const String &in_s, Element *e, void *vparam, ErrorHandler *errh);
     static String read_param(Element *e, void *thunk);

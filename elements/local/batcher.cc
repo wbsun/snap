@@ -12,7 +12,7 @@ CLICK_DECLS
 
 // Bigger enough to hold batches.
 // Doesn't waste much memory, 8 bytes each item.
-#define CLICK_PBATCH_POOL_SIZE 8
+#define CLICK_PBATCH_POOL_SIZE 128
 
 Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
 {
@@ -35,7 +35,7 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _exp_pb_lock = 0;
     _nr_pools = 0;
     _need_alloc_locking = true;
-    _nr_pre_alloc = 15;
+    _nr_pre_alloc = 7;
 
     _forced_nr_pools = 0;
     _forced_alloc_locking = false;
@@ -390,7 +390,9 @@ Batcher::add_packet(Packet *p)
 void
 Batcher::push(int i, Packet *p)
 {
-    if (_test == test_mode2) {
+    if (test_mode == test_mode2) {
+	if (_test)
+	    hvp_chatter("single push mode \n");
 	output(0).push(p);
 	return;
     }
@@ -398,6 +400,8 @@ Batcher::push(int i, Packet *p)
     if (!_batch) {
 	_batch = alloc_batch();
 	if (unlikely(!_batch)) {
+	    if (_test)
+		hvp_chatter("no batch available\n");
 	    p->kill();
 	    return;
 	}	    

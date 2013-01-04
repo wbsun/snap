@@ -103,16 +103,21 @@ BToNMDevice::initialize(ErrorHandler *errh)
 	    _fd = _netmap.open(_ifname, true, errh);
 	if (_fd >= 0) {
 	    _my_fd = true;
-	    if (!_full_nm)
+	    if (!_full_nm) {
 		add_select(_fd, SELECT_READ); // NB NOT writable!
+		ScheduleInfo::initialize_task(this, &_task, false, errh);
+	    }
 	} else
 	    return -1;
     }
+    
     if (_fd >= 0) {
 	_netmap.initialize_rings_tx();
 
-	if (_full_nm)
+	if (_full_nm) {
 	    _nm_fd = NetmapInfo::register_thread_poll(_fd, this, NetmapInfo::dev_tx);
+	    ScheduleInfo::initialize_task(this, &_task, true, errh);
+	}
     }
 
     char sring[32];
@@ -124,7 +129,8 @@ BToNMDevice::initialize(ErrorHandler *errh)
 			   _ifname.c_str(), _ringid);
     used = this;
 
-    ScheduleInfo::join_scheduler(this, &_task, errh);
+    
+//    ScheduleInfo::join_scheduler(this, &_task, errh);
 //    _signal = Notifier::upstream_empty_signal(this, 0, &_task);
     return 0;
 }
@@ -250,6 +256,7 @@ BToNMDevice::run_task(Task *)
 {
     int r = 0;
     if (_full_nm) {
+	click_chatter("run task of btonmdv\n");
 	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
 	if (r > 0) {
@@ -263,7 +270,7 @@ BToNMDevice::run_task(Task *)
     
     PBatch *p = _q;
     _q = 0;
-    int count = 0, r=0;
+    int count = 0;
 
     do {
 	if (!p) {

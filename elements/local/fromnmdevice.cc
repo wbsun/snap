@@ -187,12 +187,20 @@ FromNMDevice::netmap_dispatch()
 	 ri != _netmap.ring_end; ++ri) {
 	struct netmap_ring *ring = NETMAP_RXRING(_netmap.nifp, ri);
 
+	if (unlikely(_test))
+	    click_chatter("before refill: "
+			  "netmap ring %u slots, av %u, ring %u, resv %u",
+			  ring->num_slots, ring->avail,
+			  ri,
+			  ring->reserved);
+	
 	NetmapInfo::refill(ring);
 
 	if (unlikely(_test))
-	    click_chatter("netmap ring %u slots, av %u, rings %u",
+	    click_chatter("netmap ring %u slots, av %u, rings %u, resv %u",
 			  ring->num_slots, ring->avail,
-			  _netmap.ring_end - _netmap.ring_begin);
+			  _netmap.ring_end - _netmap.ring_begin,
+			  ring->reserved);
 
 	if (ring->avail == 0)
 	    continue;
@@ -216,7 +224,7 @@ FromNMDevice::netmap_dispatch()
 		++ring->reserved;
 		--nzcopy;
 	    } else {
-		p = 0;// Packet::make(_headroom, buf, ring->slot[cur].len, 0);
+		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
 		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
 		ring->slot[res1idx].buf_idx = buf_idx;
 	    }
@@ -225,7 +233,8 @@ FromNMDevice::netmap_dispatch()
 	    --ring->avail;
 	    ++n;
 
-	    emit_packet(p, 0, ring->ts);
+	    if (p)
+		emit_packet(p, 0, ring->ts);
 	}
     }
     return n;
@@ -251,6 +260,7 @@ FromNMDevice::run_task(Task *)
     int r = 0;
 
     if (_full_nm) {
+	click_chatter("run task of fromnmdev\n");
 	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
 	if (r>0) {
