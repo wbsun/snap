@@ -55,20 +55,26 @@ void
 NetmapInfo::alloc_extra_bufs(int fd)
 {
     int nr_buf_pp = nr_extra_bufs/nr_threads;
+    int idx[NETMAP_IOC_EXBUF_ARR_SZ];
 
     for (int i=0; i<nr_threads; i++) {
-	int idx;
 	for (int b=0; b<nr_buf_pp; b++) {
-	    int r = ioctl(fd, NIOCALLOCBUF, &idx);
+	    int r = ioctl(fd, NIOCALLOCBUF, idx);
 	    if (r) {
 		ErrorHandler::default_handler()->error(
 		    "netmap alloc extra buf: %s",
 		    strerror(errno));
 		return;
 	    }
-	    unsigned char *buf = (unsigned char*)(__buf_start + idx*__nr_buf_size);
-	    assert(!buf_pools[i].full());
-	    buf_pools[i].add_new(buf);
+	    for (int j=0; j<NETMAP_IOC_EXBUF_ARR_SZ; j++) {
+		unsigned char *buf = (unsigned char*)
+		    (__buf_start + idx[j]*__nr_buf_size);
+		// assert(!buf_pools[i].full());
+		buf_pools[i].add_new(buf);
+	    }
+	    if (r%10==0) // Give us some hope, ioctl is slow..
+		click_chatter("pool %d, %d sets nm exbufs done\n",
+			      i, b);
 	}
     }
 }
@@ -77,14 +83,23 @@ void
 NetmapInfo::free_extra_bufs(int fd)
 {
     //if (nr_extra_bufs <= 0)
-	return;
+    return;
+
+    int idx[NETMAP_IOC_EXBUF_ARR_SZ];
     
     for (int i=0; i<nr_threads; i++) {
-	int idx;
 	while(!buf_pools[i].empty()) {
-	    unsigned char *buf = buf_pools[i].remove_and_get_oldest();
-	    idx = (buf - ((unsigned char*)(__buf_start)))/__nr_buf_size;
-	    int r = ioctl(fd, NIOCFREEBUF, &idx);
+	    int j;
+	    for (j=0; j<NETMAP_IOC_EXBUF_ARR_SZ
+		     && !buf_pools[i].empty(); j++) {
+		unsigned char *buf =
+		    buf_pools[i].remove_and_get_oldest();
+		idx[j] = (buf - ((unsigned char*)(__buf_start)))/__nr_buf_size;
+	    }
+	    for (; j<NETMAP_IOC_EXBUF_ARR_SZ; j++)
+		idx[j] = -1;
+	    
+	    int r = ioctl(fd, NIOCFREEBUF, idx);
 	    if (r) {
 		ErrorHandler::default_handler()->error(
 		    "netmap free extra buf: %s",
@@ -233,19 +248,19 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 
     if (ringid < 0) {
 	per_ring = false;
-	ring = NETMAP_RXRING(nifp, 0);
+	sample_ring = NETMAP_RXRING(nifp, 0);
     }
     else {
 	per_ring = true;
 	ring_begin = ringid;
 	ring_end = ringid+1;
-	ring = NETMAP_RXRING(nifp, ring_begin);
+	sample_ring = NETMAP_RXRING(nifp, ring_begin);
     }
 
     netmap_memory_lock.acquire();
     if (NetmapInfo::__buf_start == 0) {
-	NetmapInfo::__buf_start = (ssize_t)((char*)(ring) + ring->buf_ofs);
-	NetmapInfo::__nr_buf_size = ring->nr_buf_size;
+	NetmapInfo::__buf_start = (ssize_t)((char*)(sample_ring) + sample_ring->buf_ofs);
+	NetmapInfo::__nr_buf_size = sample_ring->nr_buf_size;
 	NetmapInfo::alloc_extra_bufs(fd);
     }
     netmap_memory_lock.release();
