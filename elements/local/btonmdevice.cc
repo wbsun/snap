@@ -1,5 +1,5 @@
 #include <click/config.h>
-#include "tonmdevice.hh"
+#include "btonmdevice.hh"
 #include <click/error.hh>
 #include <click/etheraddress.hh>
 #include <click/args.hh>
@@ -27,7 +27,7 @@
 
 CLICK_DECLS
 
-ToNMDevice::ToNMDevice()
+BToNMDevice::BToNMDevice()
     : _task(this), _timer(&_task), _q(0), _pulls(0)
 {
     _fd = -1;
@@ -35,25 +35,33 @@ ToNMDevice::ToNMDevice()
     _ringid = -1;
     _full_nm = 1;
     _nm_fd = -1;
+    _my_port = -1;
+    _nr_ports = 0;
+    _cur = 0;
+    _my_pkts = 0;
+    _debug = false;
+    _test = false;
 }
 
-ToNMDevice::~ToNMDevice()
+BToNMDevice::~BToNMDevice()
 {
 }
 
 int
-ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
+BToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     int nmexbuf = 0;
-    
     _burst = 1;
     _ringid = -1;
     if (Args(conf, this, errh)
 	.read_mp("DEVNAME", _ifname)
+	.read("PORT", _my_port)
+	.read("NRPORTS", _nr_ports)
 	.read("DEBUG", _debug)
 	.read("BURST", _burst)
 	.read("RING", _ringid)
 	.read("FULL_NM", _full_nm)
+	.read("TEST", _test)
 	.read("NMEXBUF", nmexbuf)
 	.complete() < 0)
 	return -1;
@@ -61,7 +69,7 @@ ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	return errh->error("interface not set");
     if (_burst <= 0)
 	return errh->error("bad BURST");
-
+    
     if (nmexbuf > 0)
 	NetmapInfo::nr_extra_bufs = nmexbuf;
 
@@ -70,7 +78,7 @@ ToNMDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 FromNMDevice *
-ToNMDevice::find_fromnmdevice() const
+BToNMDevice::find_fromnmdevice() const
 {
     Router *r = router();
     for (int ei = 0; ei < r->nelements(); ++ei) {
@@ -85,7 +93,7 @@ ToNMDevice::find_fromnmdevice() const
 }
 
 int
-ToNMDevice::initialize(ErrorHandler *errh)
+BToNMDevice::initialize(ErrorHandler *errh)
 {
     _timer.initialize(this);
 
@@ -102,16 +110,21 @@ ToNMDevice::initialize(ErrorHandler *errh)
 	    _fd = _netmap.open(_ifname, true, errh);
 	if (_fd >= 0) {
 	    _my_fd = true;
-	    if (!_full_nm)
+	    if (!_full_nm) {
 		add_select(_fd, SELECT_READ); // NB NOT writable!
+		ScheduleInfo::initialize_task(this, &_task, false, errh);
+	    }
 	} else
 	    return -1;
     }
+    
     if (_fd >= 0) {
 	_netmap.initialize_rings_tx();
 
-	if (_full_nm)
+	if (_full_nm) {
 	    _nm_fd = NetmapInfo::register_thread_poll(_fd, this, NetmapInfo::dev_tx);
+	    ScheduleInfo::initialize_task(this, &_task, true, errh);
+	}
     }
 
     char sring[32];
@@ -121,16 +134,16 @@ ToNMDevice::initialize(ErrorHandler *errh)
     if (used)
 	return errh->error("duplicate writer for device %<%s:%d%>",
 			   _ifname.c_str(), _ringid);
-    
     used = this;
 
-    ScheduleInfo::join_scheduler(this, &_task, errh);
+    
+//    ScheduleInfo::join_scheduler(this, &_task, errh);
 //    _signal = Notifier::upstream_empty_signal(this, 0, &_task);
     return 0;
 }
 
 void
-ToNMDevice::cleanup(CleanupStage)
+BToNMDevice::cleanup(CleanupStage)
 {
     if (_full_nm && _nm_fd >= 0) {
 	NetmapInfo::poll_fds[_nm_fd]->running = 0;
@@ -143,83 +156,105 @@ ToNMDevice::cleanup(CleanupStage)
 }
 
 
+#define __pbatch_next_pkt(i, pb, mpt, dpt, p)	\
+    do {					\
+	p = 0;					\
+	while(i<pb->npkts) {			\
+	    if (_my_port >= 0) {		\
+		dport = pb->anno_hptr(i);	\
+		assert(dport);			\
+		if (*dport == _my_port) {	\
+		    p = pb->pptrs[i];		\
+		    break;			\
+		} else				\
+		    i++;			\
+	    } else {				\
+		p = pb->pptrs[i];		\
+		break;				\
+	    }					\
+	}					\
+    } while(0)
+
+
+
 int
-ToNMDevice::netmap_send_packet(Packet *p)
-{
-    for (unsigned ri = _netmap.ring_begin; ri != _netmap.ring_end; ++ri) {
+BToNMDevice::netmap_send_batch(PBatch *pb, int from)
+{ 
+    int i = from;
+    Packet *p = 0;
+    uint8_t *dport = 0; // dst port offset is 0.
+
+    __pbatch_next_pkt(i, pb, _my_port, dport, p);
+
+    if (!p)
+	return i;
+    
+    for (unsigned ri = _netmap.ring_begin;
+	 ri != _netmap.ring_end && p;
+	 ++ri)
+    {
 	struct netmap_ring *ring = NETMAP_TXRING(_netmap.nifp, ri);
-	if (ring->avail == 0)
-	    continue;
-	unsigned cur = ring->cur;
-	unsigned buf_idx = ring->slot[cur].buf_idx;
-	if (buf_idx < 2)
-	    continue;
-	unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
-	uint32_t p_length = p->length();
-	if (NetmapInfo::is_netmap_buffer(p)
-	    && !p->shared() /* A little risk: && p->buffer() == p->data() */
-	    && noutputs() == 0) {
-	    ring->slot[cur].buf_idx = NETMAP_BUF_IDX(ring, (char *) p->buffer());
-	    ring->slot[cur].flags |= NS_BUF_CHANGED;
-	    NetmapInfo::buffer_destructor(buf, 0);
-	    p->reset_buffer();
-	} else
-	    memcpy(buf, p->data(), p_length);
-	ring->slot[cur].len = p_length;
 
-	// need this?
+	while (p && ring->avail > 0) {
+	    unsigned cur = ring->cur;
+	    unsigned buf_idx = ring->slot[cur].buf_idx;
+	    if (buf_idx < 2)
+		continue;
+	    unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
+	    uint32_t p_length = p->length();
+	    if (NetmapInfo::is_netmap_buffer(p)
+		&& !p->shared() /* A little risk: && p->buffer() == p->data() */
+		) {
+		ring->slot[cur].buf_idx = NETMAP_BUF_IDX(ring, (char *) p->buffer());
+		ring->slot[cur].flags |= NS_BUF_CHANGED;
+		NetmapInfo::buffer_destructor(buf, 0);
+		p->reset_buffer();
+	    } else
+		memcpy(buf, p->data(), p_length);
+	    ring->slot[cur].len = p_length;
+	    
+	    // need this?
 //	__asm__ volatile("" : : : "memory");
-	ring->cur = NETMAP_RING_NEXT(ring, cur);
-	ring->avail--;
-	return 0;
-    }
-    if (!_full_nm)
+	    ring->cur = NETMAP_RING_NEXT(ring, cur);
+	    ring->avail--;
+	    _my_pkts++;
+	    i++;
+
+	    __pbatch_next_pkt(i, pb, _my_port, dport, p);
+	}
+    }    
+    
+    if (!_full_nm && i < pb->npkts)
 	errno = ENOBUFS;
-    return -1;
+    return i;
 }
 
-/*
- * Linux select marks datagram fd's as writeable when the socket
- * buffer has enough space to do a send (sock_writeable() in
- * sock.h). BSD select always marks datagram fd's as writeable
- * (bpf_poll() in sys/net/bpf.c) This function should behave
- * appropriately under both.  It makes use of select if it correctly
- * tells us when buffers are available, and it schedules a backoff
- * timer if buffers are not available.
- * --jbicket
- */
-int
-ToNMDevice::send_packet(Packet *p)
-{
-    int r = 0;
-    errno = 0;
-
-    r = netmap_send_packet(p);
-
-    if (r >= 0)
-	return 0;
-    else
-	return errno ? -errno : -EINVAL;
-}
 
 int
-ToNMDevice::send_packets_nm()
+BToNMDevice::send_packets_nm()
 {
-    Packet *p = _q;
+    PBatch *p = _q;
     _q = 0;
-    int count = 0, r=0;
+    int count = 0;
 
     do {
 	if (!p) {
-	    if (!(p = input(0).pull()))
+	    _cur = 0;
+	    while (!(p = input(0).bpull()) && (++_cur < 10000));
+	    if (!p) {
+		_cur = 0;
 		break;
+	    }
+	    _cur = 0;
+	    _my_pkts = 0;
 	}
 	
-	if ((r = netmap_send_packet(p)) >= 0) {
+	if ((_cur = netmap_send_batch(p, _cur)) >= p->npkts) {
 	    p->kill();
 	    p=0;
+	    ++count;
+	    _cur = 0;
 	} else {
-	    _backoff = 1;
 	    _q = p;
 	    break;
 	}
@@ -229,43 +264,44 @@ ToNMDevice::send_packets_nm()
 }
 
 bool
-ToNMDevice::run_task(Task *)
+BToNMDevice::run_task(Task *)
 {
     int r = 0;
     if (_full_nm) {
+	click_chatter("run task of btonmdv t %d\n", click_current_thread_id);
 	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
 	if (r > 0) {
 	    _task.fast_reschedule();
 	    return true;
-	}
-	else
+	} else
 	    return false;
     }
+
+    // Should not go here, use ToNMDevice if not _full_nm.
     
-    Packet *p = _q;
+    PBatch *p = _q;
     _q = 0;
     int count = 0;
 
     do {
 	if (!p) {
-	    ++_pulls;
-	    if (!(p = input(0).pull()))
+	    if (!(p = input(0).bpull()))
 		break;
+	    _cur = 0;
+	    _my_pkts = 0;
 	}
-	if ((r = send_packet(p)) >= 0) {
+	if ((_cur = netmap_send_batch(p, _cur)) >= p->npkts) {
 	    _backoff = 0;
-	    checked_output_push(0, p);
+	    p->kill();
 	    ++count;
 	    p = 0;
 	} else
 	    break;
     } while (count < _burst);
 
-    if (r == -ENOBUFS || r == -EAGAIN) {
-	assert(!_q);
+    if (p) {
 	_q = p;
-
 	if (!_backoff) {
 	    _backoff = 1;
 	    add_select(_fd, SELECT_WRITE);
@@ -273,26 +309,16 @@ ToNMDevice::run_task(Task *)
 	    _timer.schedule_after(Timestamp::make_usec(_backoff));
 	    if (_backoff < 256)
 		_backoff *= 2;
-	    if (_debug) {
-		Timestamp now = Timestamp::now();
-		click_chatter(
-		    "%p{element} backing off for %d at %p{timestamp}\n", this, _backoff, &now);
-	    }
-	}		
-		
-	return count > 0;
-    } else if (r < 0) {
-	click_chatter("ToNMDevice(%s): %s", _ifname.c_str(), strerror(-r));
-	checked_output_push(1, p);
-    }
+	}
+    } else {
+	_task.reschedule();
+    }       
 
-    if (p)
-	_task.fast_reschedule();
     return count > 0;
 }
 
 void
-ToNMDevice::selected(int fd, int mask)
+BToNMDevice::selected(int fd, int mask)
 {
     if (_full_nm) {
 	send_packets_nm();	
@@ -304,9 +330,9 @@ ToNMDevice::selected(int fd, int mask)
 
 
 String
-ToNMDevice::read_param(Element *e, void *thunk)
+BToNMDevice::read_param(Element *e, void *thunk)
 {
-    ToNMDevice *td = (ToNMDevice *)e;
+    BToNMDevice *td = (BToNMDevice *)e;
     switch((uintptr_t) thunk) {
     case h_debug:
 	return String(td->_debug);
@@ -322,10 +348,10 @@ ToNMDevice::read_param(Element *e, void *thunk)
 }
 
 int
-ToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
+BToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
 		     ErrorHandler *errh)
 {
-    ToNMDevice *td = (ToNMDevice *)e;
+    BToNMDevice *td = (BToNMDevice *)e;
     String s = cp_uncomment(in_s);
     switch ((intptr_t)vparam) {
     case h_debug: {
@@ -340,7 +366,7 @@ ToNMDevice::write_param(const String &in_s, Element *e, void *vparam,
 }
 
 void
-ToNMDevice::add_handlers()
+BToNMDevice::add_handlers()
 {
     add_task_handlers(&_task);
     add_read_handler("debug", read_param, h_debug, Handler::CHECKBOX);
@@ -352,4 +378,4 @@ ToNMDevice::add_handlers()
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(FromNMDevice userlevel)
-EXPORT_ELEMENT(ToNMDevice)
+EXPORT_ELEMENT(BToNMDevice)

@@ -12,7 +12,7 @@ CLICK_DECLS
 
 // Bigger enough to hold batches.
 // Doesn't waste much memory, 8 bytes each item.
-#define CLICK_PBATCH_POOL_SIZE 16
+#define CLICK_PBATCH_POOL_SIZE 1024
 
 Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
 {
@@ -35,12 +35,14 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _exp_pb_lock = 0;
     _nr_pools = 0;
     _need_alloc_locking = true;
-    _nr_pre_alloc = 15;
+    _nr_pre_alloc = CLICK_PBATCH_POOL_SIZE-1;
+    _batch_pool_size = CLICK_PBATCH_POOL_SIZE;
 
     _forced_nr_pools = 0;
     _forced_alloc_locking = false;
     _forced_free_locking = false;
     _need_free_locking = false;
+    _local_alloc = false;
 }
 
 Batcher::~Batcher()
@@ -79,7 +81,7 @@ Batcher::init_pb_pool()
     {
 	for (int i=0; i<_nr_pools; i++)
 	{
-	    if (!_pb_pools[i].reserve(CLICK_PBATCH_POOL_SIZE)) {
+	    if (!_pb_pools[i].reserve(_batch_pool_size)) {
 		hvp_chatter("Batcher batch pool %d failed "
 			    "to reserve space.", i);
 		return -1;
@@ -100,6 +102,10 @@ Batcher::init_pb_pool()
 		    finit_batch_for_recycle(p);
 		    _pb_pools[i].add_new(p);
 		}
+
+		if (_test)
+		    hvp_chatter("pre-allocate %d batches for pool %d\n",
+				_nr_pre_alloc, i);
 	    }
 
 	    _pb_alloc_locks[i] = 0;
@@ -280,6 +286,8 @@ Batcher::alloc_batch()
 	
 	if (_need_alloc_locking) {
 	    // hvp_chatter("locking for pool alloc\n");
+	    if (_local_alloc && _pb_alloc_locks[i])
+		    continue;			    
 	    while(atomic_uint32_t::swap(_pb_alloc_locks[i], 1) == 1);
 	}
 
@@ -298,11 +306,11 @@ Batcher::alloc_batch()
 	if (_test) {
 	    hvp_chatter("reuse batch %p\n", pb);
 	}
-	;//this->init_batch_after_recycle(pb);
+	this->init_batch_after_recycle(pb);
     } else {
-	if (_test)
+	if (_test > 1)
 	    hvp_chatter("Bad we have to create new batch...\n");
-	if (test_mode == test_mode3)
+	if (test_mode >= test_mode3)
 	    return 0;
 	pb = create_new_batch();
 	this->init_batch_after_create(pb);
@@ -318,8 +326,7 @@ Batcher::alloc_batch()
 int
 Batcher::kill_batch(PBatch *pb)
 {
-    pb->shared--;
-    if (pb->shared < 0)
+    if (atomic_uint32_t::dec_and_test(pb->shared))
     {
 	this->finit_batch_for_recycle(pb);
 	if (this->recycle_batch(pb) == false) {
@@ -330,6 +337,10 @@ Batcher::kill_batch(PBatch *pb)
 	return 0;
     }
 
+    if (_test)
+	hvp_chatter("batch %p shared %u, not killed\n",
+		    pb, pb->shared);
+    
     return 1; // no kill, shared.
 }
 
@@ -388,7 +399,9 @@ Batcher::add_packet(Packet *p)
 void
 Batcher::push(int i, Packet *p)
 {
-    if (_test == test_mode2) {
+    if (test_mode == test_mode2) {
+	if (_test > 1)
+	    hvp_chatter("single push mode \n");
 	output(0).push(p);
 	return;
     }
@@ -396,6 +409,8 @@ Batcher::push(int i, Packet *p)
     if (!_batch) {
 	_batch = alloc_batch();
 	if (unlikely(!_batch)) {
+	    if (_test)
+		hvp_chatter("no batch available\n");
 	    p->kill();
 	    return;
 	}	    
@@ -434,15 +449,23 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "NR_POOLS", cpkN, cpInteger, &_forced_nr_pools,
 		     "ALLOC_LOCK", cpkN, cpBool, &_forced_alloc_locking,
 		     "FREE_LOCK", cpkN, cpBool, &_forced_free_locking,
+		     "LOCAL_ALLOC", cpkN, cpBool, &_local_alloc,
+		     "POOL_SIZE", cpkN, cpInteger, &_batch_pool_size,
 		     cpEnd) < 0)
 	return -1;
 
-    if (_nr_pre_alloc >= CLICK_PBATCH_POOL_SIZE) {
+    if (__builtin_popcount(_batch_pool_size>>1) != 1) {
+	errh->fatal("Batcher need a power of 2 pool size,"
+		    " but given %d\n", _batch_pool_size);
+	return -1;
+    }
+
+    if (_nr_pre_alloc >= _batch_pool_size) {
 	errh->warning("Batch pool pre-alloc number %d larger than "
 		      "or equal to pool size %d, "
 		      "reset to pool_size-1.", _nr_pre_alloc,
-		      CLICK_PBATCH_POOL_SIZE);
-	_nr_pre_alloc = CLICK_PBATCH_POOL_SIZE-1;
+		      _batch_pool_size);
+	_nr_pre_alloc = _batch_pool_size-1;
     }
 
     this->set_batch_size(_batch_capacity);
@@ -467,6 +490,8 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
     test_mode = _test%10;
     _test = _test/10;
 #endif
+
+    this->setup_all();
     
     return 0;
 }
@@ -476,7 +501,6 @@ Batcher::initialize(ErrorHandler *errh)
 {
     _timer.initialize(this);
 
-    this->setup_all();
     if (!init_pb_pool()) {
 	hvp_chatter("Batch pool initialized.\n");
     } else

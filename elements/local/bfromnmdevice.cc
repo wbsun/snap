@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 # include <sys/ioctl.h>
-#include "fromnmdevice.hh"
+#include "bfromnmdevice.hh"
 #include <click/etheraddress.hh>
 #include <click/error.hh>
 #include <click/straccum.hh>
@@ -34,30 +34,30 @@
 
 CLICK_DECLS
 
-FromNMDevice::FromNMDevice()
+BFromNMDevice::BFromNMDevice()
     :
       _task(this),
-      _count(0), _promisc(0), _snaplen(0)
+      _count(0)
 {
     _fd = -1;
     _ringid = -1;
     _test = false;
-    _full_nm = 1;
+    _full_nm = true;
     _nm_fd = -1;
     _fd_added = false;
 }
 
-FromNMDevice::~FromNMDevice()
+BFromNMDevice::~BFromNMDevice()
 {
 }
 
 int
-FromNMDevice::configure(Vector<String> &conf,
+BFromNMDevice::configure(Vector<String> &conf,
 			ErrorHandler *errh)
 {
-    bool promisc = false, outbound = false,
-	sniffer = true, timestamp = false;
-    _snaplen = default_snaplen;
+    bool timestamp = false;
+    int nmexbuf = 0;
+
     _headroom = Packet::default_headroom;
     _headroom += (4 - (_headroom + 2) % 4) % 4; // default 4/2 alignment
     _force_ip = false;
@@ -65,40 +65,28 @@ FromNMDevice::configure(Vector<String> &conf,
     _ringid = -1;
     String encap_type;
     bool has_encap;
-
-    int _nm_exbuf = 0;
-    
     if (Args(conf, this, errh)
 	.read_mp("DEVNAME", _ifname)
-	.read_p("PROMISC", promisc)
-	.read_p("SNAPLEN", _snaplen)
-	.read("SNIFFER", sniffer)
 	.read("FORCE_IP", _force_ip)
-	.read("OUTBOUND", outbound)
 	.read("HEADROOM", _headroom)
-	.read("ENCAP", WordArg(), encap_type).read_status(has_encap)
 	.read("BURST", _burst)
 	.read("TIMESTAMP", timestamp)
 	.read("RING", _ringid)
 	.read("TEST", _test)
 	.read("FULL_NM", _full_nm)
-	.read("NMEXBUF", _nm_exbuf)
+	.read("NMEXBUF", nmexbuf)
 	.complete() < 0)
 	return -1;
-    if (_snaplen > 8190 || _snaplen < 14)
-	return errh->error("SNAPLEN out of range");
+
     if (_headroom > 8190)
 	return errh->error("HEADROOM out of range");
     if (_burst <= 0)
 	return errh->error("BURST out of range");
 
-    _sniffer = sniffer;
-    _promisc = promisc;
-    _outbound = outbound;
     _timestamp = timestamp;
-
-    if (_nm_exbuf > 0)
-	NetmapInfo::nr_extra_bufs = _nm_exbuf;
+    
+    if (nmexbuf > 0)
+	NetmapInfo::nr_extra_bufs = nmexbuf;
 
     NetmapInfo::register_buf_consumer();
     NetmapInfo::set_dev_dir(_ifname.c_str(),
@@ -108,7 +96,7 @@ FromNMDevice::configure(Vector<String> &conf,
 }
 
 int
-FromNMDevice::initialize(ErrorHandler *errh)
+BFromNMDevice::initialize(ErrorHandler *errh)
 {
     if (!_ifname)
 	return errh->error("interface not set");
@@ -126,40 +114,30 @@ FromNMDevice::initialize(ErrorHandler *errh)
 		_fd, this, NetmapInfo::dev_rx);
     }
 
-    if (_fd >= 0) {
-	if (!_full_nm) {
-	    ScheduleInfo::initialize_task(this, &_task, false, errh);
-	    add_select(_fd, SELECT_READ);
-	    _fd_added = true;
-	} else
-	    ScheduleInfo::initialize_task(this, &_task, true, errh);
+    ScheduleInfo::initialize_task(this, &_task, false, errh);
+    if (_fd >= 0 /*&& !_full_nm*/) {
+	add_select(_fd, SELECT_READ);
+	_fd_added = true;
     }
-
-    if (!_sniffer)
-	if (KernelFilter::device_filter(_ifname, true, errh) < 0)
-	    _sniffer = true;
 
     return 0;
 }
 
 #include <stdio.h>
 void
-FromNMDevice::cleanup(CleanupStage stage)
+BFromNMDevice::cleanup(CleanupStage stage)
 {
     if (_full_nm) {
 	NetmapInfo::poll_fds[_nm_fd]->running = 0;
     }
     
-    if (stage >= CLEANUP_INITIALIZED && !_sniffer)
-	KernelFilter::device_filter(
-	    _ifname, false, ErrorHandler::default_handler());
     if (_fd >= 0)
 	    _netmap.close(_fd);
     _fd = -1;
 }
 
 void
-FromNMDevice::emit_packet(WritablePacket *p,
+BFromNMDevice::emit_packet(WritablePacket *p,
 			  int extra_len,
 			  const Timestamp &ts)
 {
@@ -177,48 +155,34 @@ FromNMDevice::emit_packet(WritablePacket *p,
     p->set_mac_header(p->data());
     SET_EXTRA_LENGTH_ANNO(p, extra_len);
 
-    if (!_force_ip || fake_pcap_force_ip(p, _datalink))
+    if (!_force_ip)
 	output(0).push(p);
     else
 	checked_output_push(1, p);
 #endif
-    if (p)
+    if (!p)
 	output(0).push(p);
 }
 
 int
-FromNMDevice::netmap_dispatch()
+BFromNMDevice::netmap_dispatch()
 {
     int n = 0;
-    uint32_t oldres;
     for (unsigned ri = _netmap.ring_begin;
 	 ri != _netmap.ring_end; ++ri) {
 	struct netmap_ring *ring = NETMAP_RXRING(_netmap.nifp, ri);
 
-	if (unlikely(_test))
-	    click_chatter("before refill: "
-			  "netmap ring %u slots, av %u, ring %u, resv %u",
-			  ring->num_slots, ring->avail,
-			  ri,
-			  ring->reserved);
-//	oldres = ring->reserved;
-
 	NetmapInfo::refill(ring);
+
 	if (unlikely(_test))
-	    click_chatter("after refill: "
-			  "netmap ring %u slots, av %u, ring %u, resv %u",
+	    click_chatter("netmap ring %u slots, av %u, rings %u",
 			  ring->num_slots, ring->avail,
-			  ri,
-			  ring->reserved);
-//	if (oldres && oldres == ring->reserved)
-	    // click_chatter("no netmap buffer available for ring %d, av %u, res %u",
-			  // ri, ring->avail, ring->reserved);
+			  _netmap.ring_end - _netmap.ring_begin);
 
-	if (ring->avail == 0) {
+	if (ring->avail == 0)
 	    continue;
-	}	
 
-	//int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
+	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 
 	while (n != _burst &&
 	       ring->avail > 0) {
@@ -230,39 +194,30 @@ FromNMDevice::netmap_dispatch()
 		(unsigned char *) NETMAP_BUF(ring, buf_idx);
 
 	    WritablePacket *p;
-	    //if (nzcopy > 0) {
+	    if (nzcopy > 0) {
 		p = Packet::make(buf,
 				 ring->slot[cur].len,
 				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
-		//	--nzcopy;
-	    // } else {
-		// p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
-		// unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
-		// ring->slot[res1idx].buf_idx = buf_idx;
-	    // }
+		--nzcopy;
+	    } else {
+		p = 0;// Packet::make(_headroom, buf, ring->slot[cur].len, 0);
+		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
+		ring->slot[res1idx].buf_idx = buf_idx;
+	    }
 
 	    ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 	    --ring->avail;
 	    ++n;
 
-	    if (p)
-		emit_packet(p, 0, ring->ts);
+	    emit_packet(p, 0, ring->ts);
 	}
-
-	NetmapInfo::refill(ring);
-	if (unlikely(_test))
-	    click_chatter("after emit refill: "
-			  "netmap ring %u slots, av %u, ring %u, resv %u",
-			  ring->num_slots, ring->avail,
-			  ri,
-			  ring->reserved);	
     }
     return n;
 }
 
 void
-FromNMDevice::selected(int fd, int mask)
+BFromNMDevice::selected(int fd, int mask)
 {    
     if (! (mask & Element::SELECT_READ))
 	return;
@@ -272,22 +227,28 @@ FromNMDevice::selected(int fd, int mask)
 	if (!_full_nm)
 	    _task.reschedule();	
     }
+
+    if (_full_nm && !(mask & NetmapInfo::FROM_NM)) {
+//	remove_select(_fd, SELECT_READ);
+//	_fd_added = false;
+	_task.reschedule();
+    }
 }
 
 bool
-FromNMDevice::run_task(Task *)
+BFromNMDevice::run_task(Task *)
 {
     // Read and push() at most one burst of packets.
     int r = 0;
 
     if (_full_nm) {
-	click_chatter("run task of fromnmdev t %d\n", click_current_thread_id);
-	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
+	r = NetmapInfo::run_fd_poll(_nm_fd);
 
-	if (r>0) {
+	if (r<0)
 	    _task.fast_reschedule();
+	
+	if (!r)
 	    return true;
-	}
 	else
 	    return false;
     } else {
@@ -302,23 +263,23 @@ FromNMDevice::run_task(Task *)
 }
 
 String
-FromNMDevice::read_handler(Element* e, void *thunk)
+BFromNMDevice::read_handler(Element* e, void *thunk)
 {
-    FromNMDevice* fd = static_cast<FromNMDevice*>(e);
+    BFromNMDevice* fd = static_cast<BFromNMDevice*>(e);
     return String(fd->_count);
 }
 
 int
-FromNMDevice::write_handler(
+BFromNMDevice::write_handler(
     const String &, Element *e, void *, ErrorHandler *)
 {
-    FromNMDevice* fd = static_cast<FromNMDevice*>(e);
+    BFromNMDevice* fd = static_cast<BFromNMDevice*>(e);
     fd->_count = 0;
     return 0;
 }
 
 void
-FromNMDevice::add_handlers()
+BFromNMDevice::add_handlers()
 {
     add_read_handler("count", read_handler, 0);
     add_write_handler("reset_counts",
@@ -327,5 +288,5 @@ FromNMDevice::add_handlers()
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(userlevel KernelFilter NetmapInfo)
-EXPORT_ELEMENT(FromNMDevice)
+ELEMENT_REQUIRES(userlevel NetmapInfo)
+EXPORT_ELEMENT(BFromNMDevice)

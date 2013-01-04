@@ -1,20 +1,21 @@
-#ifndef CLICK_TONMDEVICE_HH
-#define CLICK_TONMDEVICE_HH
+#ifndef CLICK_BTONMDEVICE_HH
+#define CLICK_BTONMDEVICE_HH
 #include <click/element.hh>
 #include <click/string.hh>
 #include <click/task.hh>
 #include <click/timer.hh>
 #include <click/notifier.hh>
 #include "elements/local/fromnmdevice.hh"
+#include <click/pbatch.hh>
 CLICK_DECLS
 
 
-class ToNMDevice : public Element { public:
+class BToNMDevice : public Element { public:
 
-    ToNMDevice();
-    ~ToNMDevice();
+    BToNMDevice();
+    ~BToNMDevice();
 
-    const char *class_name() const	{ return "ToNMDevice"; }
+    const char *class_name() const	{ return "BToNMDevice"; }
     const char *port_count() const	{ return "1/0-2"; }
     const char *processing() const	{ return "l/h"; }
     const char *flags() const	{ return "S2"; }
@@ -41,13 +42,17 @@ class ToNMDevice : public Element { public:
     Timer _timer;
 
     String _ifname;
+    int _my_port;
+    int _nr_ports;
     int _fd;
     NetmapInfo::ring _netmap;
-    int netmap_send_packet(Packet *p);
+    int netmap_send_batch(PBatch *p, int cur);
     int _ringid;
     NotifierSignal _signal;
 
-    Packet *_q;
+    PBatch *_q;
+    int _cur;
+    int _my_pkts;
     int _burst;
 
     int _full_nm;
@@ -57,10 +62,11 @@ class ToNMDevice : public Element { public:
     bool _my_fd;
     int _backoff;
     int _pulls;
+    bool _test;
 
     enum { h_debug, h_signal, h_pulls, h_q };
     FromNMDevice *find_fromnmdevice() const;
-    int send_packet(Packet *p);
+//    int send_packet(Packet *p);
     static int write_param(
 	const String &in_s, Element *e, void *vparam, ErrorHandler *errh);
     static String read_param(Element *e, void *thunk);

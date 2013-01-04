@@ -272,9 +272,18 @@ ToDevice::initialize(ErrorHandler *errh)
 #endif
 
     // check for duplicate writers
+#if TODEVICE_ALLOW_NETMAP
+    char sring[32];
+    snprintf(sring, 32, "%d", _ringid);
+    void *&used = router()->force_attachment("device_writer_" + _ifname + sring);
+    if (used)
+	return errh->error("duplicate writer for device %<%s:%d%>",
+			   _ifname.c_str(), _ringid);
+#else
     void *&used = router()->force_attachment("device_writer_" + _ifname);
     if (used)
 	return errh->error("duplicate writer for device %<%s%>", _ifname.c_str());
+#endif
     used = this;
 
     ScheduleInfo::join_scheduler(this, &_task, errh);

@@ -35,6 +35,7 @@ public:
     const char *class_name() const	{ return "Batcher"; }
     const char *port_count() const	{ return "1-/1"; }
     const char *processing() const  { return PUSH; }
+    int configure_phase() const { return CONFIGURE_PHASE_LAST; }
 
     void push(int i, Packet *p);
     int configure(Vector<String> &conf, ErrorHandler *errh);
@@ -62,6 +63,8 @@ private:
     bool _forced_alloc_locking;
     bool _forced_free_locking;
 
+    bool _local_alloc;
+
 public:
     virtual PBatch *alloc_batch();
     virtual int kill_batch(PBatch *pb);
@@ -76,6 +79,8 @@ private:
     bool _need_free_locking;
     int _nr_pre_alloc;
 
+    int _batch_pool_size;
+
     // Call after configuration, need _mt_pushers, and other confs.
     int init_pb_pool();
 
@@ -86,7 +91,10 @@ private:
     int init_batch_after_create(PBatch* pb);
 
     // Reset args after allocting a batch from pool.
-    inline int init_batch_after_recycle(PBatch* pb) { return 0; }
+    inline int init_batch_after_recycle(PBatch* pb) {
+	pb->shared = 1;
+	return 0;
+    }
 
     // Clean up batch for recycling it.
     int finit_batch_for_recycle(PBatch *pb);

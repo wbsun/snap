@@ -1,13 +1,13 @@
 #include <click/config.h>
-#include "bunqueue.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
 #include <click/confparse.hh>
 #include <click/timestamp.hh>
 #include <click/atomic.hh>
+#include "bunqueue.hh"
 CLICK_DECLS
 
-const int BUnqueue::DEFAULT_LEN = (int)(1<<16);
+const int BUnqueue::DEFAULT_LEN = (int)(1<<3);
 
 BUnqueue::BUnqueue()
 {
@@ -74,25 +74,27 @@ BUnqueue::bpush(int i, PBatch *pb)
 {
 //    while(atomic_uint32_t::swap(_q_prod_lock, 1) == 1);
 
-#ifndef CLICK_NO_BATCH_TEST
-    if (pb->producer->test_mode >= BatchProducer::test_mode1) {
-	_que.add_new(pb);
-	return;
-    }
-#endif
-
+/*    if (pb->producer->test_mode >= BatchProducer::test_mode1) {
+      _que.add_new(pb);
+      return;
+      } */
+    
     if (unlikely(_que.full())) {
 	_drops += pb->npkts;
+
+	if (_test)
+	    hvp_chatter("batch %p killed\n", pb);
+
 	pb->kill();
-    } else
+    } else {
 	_que.add_new(pb);
+	    if (_test)
+		hvp_chatter("new batch %p added stream %d.\n",
+			    pb, pb->dev_stream);
+    }
 
 //     click_compiler_fence();
-    // _q_prod_lock = 0;
-    
-    if (_test)
-	hvp_chatter("new batch %p added stream %d.\n",
-		    pb, pb->dev_stream);
+    // _q_prod_lock = 0;    
 }
 
 PBatch *
@@ -105,16 +107,13 @@ BUnqueue::bpull(int port)
 //	while(atomic_uint32_t::swap(_q_cons_lock, 1) == 1);
 	
 	PBatch *pb = _que.oldest();
-	if (
-#ifndef CLICK_NO_BATCH_TEST
-	    pb->producer->test_mode >= BatchProducer::test_mode1 ||
-#endif
-	    pb->host_mem == 0) {
+/*	if (pb->host_mem == 0) {
 	    if (_test)
 		hvp_chatter("batch %p done\n", pb);
 	    _que.remove_oldest();
 	    return pb;
 	}
+*/
 	
 	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream)) {
 	    _que.remove_oldest_with_wmb();
@@ -127,8 +126,10 @@ BUnqueue::bpull(int port)
 			    Timestamp::now().unparse().c_str());
 	    return pb;
 	} else {
+	    //_que.remove_oldest();
 // 	    click_compiler_fence();
 	    // _q_cons_lock = 0;
+	    //pb->kill();
 	    return 0;
 	}
     }

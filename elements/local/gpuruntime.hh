@@ -19,6 +19,7 @@ private:
     size_t _wcmem_sz;
     int _nr_streams;
     bool _use_packetpool;
+    bool _test;
 };
 
 CLICK_ENDDECLS

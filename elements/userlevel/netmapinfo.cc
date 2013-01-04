@@ -47,6 +47,69 @@ map<string, uint32_t> NetmapInfo::dev_dirs;
 
 vector<NetmapInfo::nmpollfd*> NetmapInfo::poll_fds;
 
+int NetmapInfo::nr_extra_bufs = 0;
+ssize_t NetmapInfo::__buf_start = 0;
+uint16_t NetmapInfo::__nr_buf_size = 2048;
+
+void
+NetmapInfo::alloc_extra_bufs(int fd)
+{
+    int nr_buf_pp = nr_extra_bufs/nr_threads;
+    int idx[NETMAP_IOC_EXBUF_ARR_SZ];
+
+    for (int i=0; i<nr_threads; i++) {
+	for (int b=0; b<nr_buf_pp; b++) {
+	    int r = ioctl(fd, NIOCALLOCBUF, idx);
+	    if (r) {
+		ErrorHandler::default_handler()->error(
+		    "netmap alloc extra buf: %s",
+		    strerror(errno));
+		return;
+	    }
+	    for (int j=0; j<NETMAP_IOC_EXBUF_ARR_SZ; j++) {
+		unsigned char *buf = (unsigned char*)
+		    (__buf_start + idx[j]*__nr_buf_size);
+		// assert(!buf_pools[i].full());
+		buf_pools[i].add_new(buf);
+	    }
+	    if (r%10==0) // Give us some hope, ioctl is slow..
+		click_chatter("pool %d, %d sets nm exbufs done\n",
+			      i, b);
+	}
+    }
+}
+
+void
+NetmapInfo::free_extra_bufs(int fd)
+{
+    //if (nr_extra_bufs <= 0)
+    return;
+
+    int idx[NETMAP_IOC_EXBUF_ARR_SZ];
+    
+    for (int i=0; i<nr_threads; i++) {
+	while(!buf_pools[i].empty()) {
+	    int j;
+	    for (j=0; j<NETMAP_IOC_EXBUF_ARR_SZ
+		     && !buf_pools[i].empty(); j++) {
+		unsigned char *buf =
+		    buf_pools[i].remove_and_get_oldest();
+		idx[j] = (buf - ((unsigned char*)(__buf_start)))/__nr_buf_size;
+	    }
+	    for (; j<NETMAP_IOC_EXBUF_ARR_SZ; j++)
+		idx[j] = -1;
+	    
+	    int r = ioctl(fd, NIOCFREEBUF, idx);
+	    if (r) {
+		ErrorHandler::default_handler()->error(
+		    "netmap free extra buf: %s",
+		    strerror(errno));
+		return;
+	    }
+	}
+    }
+}
+
 int
 NetmapInfo::initialize(int nthreads, ErrorHandler *errh)
 {
@@ -167,8 +230,11 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 	! (ite->second & NetmapInfo::dev_tx)) {
 	req.nr_ringid |= NETMAP_NO_TX_POLL;
 	dirs = NetmapInfo::dev_rx;
-    } else
+	errh->message("Netmap dev %s open with RX\n", ifname.c_str());
+    } else {
 	dirs = NetmapInfo::dev_rx | NetmapInfo::dev_tx;
+	errh->message("Netmap dev %s open with RX and TX\n", ifname.c_str());
+    }
 
     if ((r = ioctl(fd, NIOCREGIF, &req))) {
 	errh->error("netmap register %s: %s",
@@ -176,16 +242,28 @@ NetmapInfo::ring::__open(const String &ifname, int ringid,
 	goto error;
     }
 
-
     nifp = NETMAP_IF(mem, req.nr_offset);
 
-    if (ringid < 0)
+    struct netmap_ring *sample_ring;
+
+    if (ringid < 0) {
 	per_ring = false;
+	sample_ring = NETMAP_RXRING(nifp, 0);
+    }
     else {
 	per_ring = true;
 	ring_begin = ringid;
 	ring_end = ringid+1;
+	sample_ring = NETMAP_RXRING(nifp, ring_begin);
     }
+
+    netmap_memory_lock.acquire();
+    if (NetmapInfo::__buf_start == 0) {
+	NetmapInfo::__buf_start = (ssize_t)((char*)(sample_ring) + sample_ring->buf_ofs);
+	NetmapInfo::__nr_buf_size = sample_ring->nr_buf_size;
+	NetmapInfo::alloc_extra_bufs(fd);
+    }
+    netmap_memory_lock.release();
 		      
     return fd;
 }
@@ -238,6 +316,7 @@ NetmapInfo::ring::close(int fd)
     if (--netmap_memory_users <= 0 && netmap_memory != MAP_FAILED) {
 	munmap(netmap_memory, netmap_memory_size);
 	netmap_memory = MAP_FAILED;
+	NetmapInfo::free_extra_bufs(fd);	    
     }
     netmap_memory_lock.release();
     ::close(fd);
@@ -281,13 +360,13 @@ NetmapInfo::register_thread_poll(int fd, Element *e, uint32_t dir)
 }
 
 int
-NetmapInfo::run_fd_poll(int idx)
+NetmapInfo::run_fd_poll(int idx, int times)
 {
     struct pollfd fds[1];
     nmpollfd *pfd = poll_fds[idx];
 
     fds[0].fd = pfd->fd;
-    fds[0].events = (pfd->rxe?(POLLIN):0)|(pfd->txe?(POLLIN):0);
+    fds[0].events = (pfd->rxe?(POLLIN):0)|(pfd->txe?(POLLOUT):0);
 
     if (!atomic_uint32_t::compare_and_swap(pfd->running, 0, 1))
 	return 1;
@@ -311,6 +390,14 @@ NetmapInfo::run_fd_poll(int idx)
 		pfd->rxe->selected(pfd->fd, Element::SELECT_READ | FROM_NM);
 	    if (pfd->txe && (fds[0].revents & POLLOUT))
 		pfd->txe->selected(pfd->fd, Element::SELECT_WRITE | FROM_NM);
+	}
+
+	if (times > 0) {
+	    --times;
+	    if (times <= 0) {
+		atomic_uint32_t::swap(pfd->running, 0);
+		return 2;
+	    }
 	}
     }
 

@@ -7,7 +7,7 @@
 #include <click/timestamp.hh>
 CLICK_DECLS
 
-const int PushBatchQueue::DEFAULT_LEN = (int)(1<<16);
+const int PushBatchQueue::DEFAULT_LEN = (int)(1<<3);
 
 PushBatchQueue::PushBatchQueue() : _task(this), _que_len(DEFAULT_LEN),
 				   _block(false), _process_all(false),
@@ -50,8 +50,9 @@ PushBatchQueue::initialize(ErrorHandler *errh)
 	errh->fatal("PushBatchQueue failed to reserve batch queue.\n");
 	return -1;
     }
-    
-    ScheduleInfo::initialize_task(this, &_task, errh);
+
+    if (!_fast_sched)
+	ScheduleInfo::initialize_task(this, &_task, errh);
     return 0;
 }
 
@@ -73,15 +74,52 @@ PushBatchQueue::bpush(int i, PBatch *pb)
     }
     else {
 	_que.add_new(pb);
-	if (_sched_on_new)
+	if (_sched_on_new && !_fast_sched)
 	    _task.fast_reschedule();
     }
+
+    if (_fast_sched)
+	check_batch();
+}
+
+int
+PushBatchQueue::check_batch()
+{
+    int processed = 0;
+    
+    while (!_que.empty()) {
+	PBatch *pb = _que.oldest();
+	bool done = false;
+
+	if (pb->dev_stream) {
+	    if (_block)
+		g4c_stream_sync(pb->dev_stream);
+	    else
+		done = g4c_stream_done(pb->dev_stream)?true:false;
+	} else
+	    done = true;
+
+	if (_block || done) {
+	    _que.remove_oldest();
+	    output(0).bpush(pb);
+	    processed++;
+	    if (_test)
+		hvp_chatter("Batch %p done at %s.\n", pb,
+			    Timestamp::now().unparse().c_str());
+	    if (!_process_all) {
+		break;
+	    }
+	} else
+	    break;
+    }
+
+    return processed;
 }
 
 bool
 PushBatchQueue::run_task(Task *task)
 {
-    while (!_que.empty()) {
+    while (!_que.empty() && !_fast_sched) {
 	PBatch *pb = _que.oldest();
 	bool done = false;
 
@@ -100,14 +138,15 @@ PushBatchQueue::run_task(Task *task)
 		hvp_chatter("Batch %p done at %s.\n", pb,
 			    Timestamp::now().unparse().c_str());
 	    if (!_process_all) {
-		if (_fast_sched)
-		    _task.fast_reschedule();
+		_task.fast_reschedule();
 		return true;
 	    }
 	} else
 	    break;
     }
-    _task.reschedule();
+
+    if (!_fast_sched)
+	_task.reschedule();
     return false;
 }
 

@@ -31,6 +31,9 @@ public:
 
     static const int DEFAULT_LEN;
 private:
+
+    int check_batch();
+    
     int _que_len;
     LFRing<PBatch*> _que;
     Task _task;
@@ -38,7 +41,7 @@ private:
     bool _test;
     bool _process_all;
     bool _sched_on_new;
-    bool _fast_sched;
+    bool _fast_sched; // make all push, no task.
     int _drops;
 };
 

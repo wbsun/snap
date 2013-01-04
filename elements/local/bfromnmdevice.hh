@@ -1,5 +1,5 @@
-#ifndef CLICK_FROMNMDEVICE_HH
-#define CLICK_FROMNMDEVICE_HH
+#ifndef CLICK_BFROMNMDEVICE_HH
+#define CLICK_BFROMNMDEVICE_HH
 #include <click/element.hh>
 #include "elements/userlevel/kernelfilter.hh"
 #include "elements/userlevel/netmapinfo.hh"
@@ -8,16 +8,15 @@
 
 CLICK_DECLS
 
-class FromNMDevice : public Element { public:	
+class BFromNMDevice : public Element { public:	
 
-    FromNMDevice();
-    ~FromNMDevice();
+    BFromNMDevice();
+    ~BFromNMDevice();
 
-    const char *class_name() const	{ return "FromNMDevice"; }
+    const char *class_name() const	{ return "BFromNMDevice"; }
     const char *port_count() const	{ return "0/1-2"; }
     const char *processing() const	{ return PUSH; }
 
-    enum { default_snaplen = 2046 };
     int configure_phase() const 	{ return KernelFilter::CONFIGURE_PHASE_FROMDEVICE; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
@@ -52,9 +51,8 @@ class FromNMDevice : public Element { public:
 
     bool _force_ip;
     int _burst;
-    int _datalink;
 
-    int _full_nm;
+    bool _full_nm;
     int _nm_fd;
 
 #if HAVE_INT64_TYPES
@@ -66,12 +64,7 @@ class FromNMDevice : public Element { public:
 
     String _ifname;
     int _ringid;
-    bool _sniffer : 1;
-    bool _promisc : 1;
-    bool _outbound : 1;
     bool _timestamp : 1;
-    int _was_promisc : 2;
-    int _snaplen;
     unsigned _headroom;
 
     static String read_handler(Element*, void*);

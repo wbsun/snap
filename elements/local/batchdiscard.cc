@@ -40,7 +40,8 @@ void
 BatchDiscard::bpush(int, PBatch *p)
 {
     _count++;
-    p->producer->kill_batch(p);    
+    if (p->producer->kill_batch(p) == 1)
+	hvp_chatter("batch %p not killed\n", p);   
 }
 
 void

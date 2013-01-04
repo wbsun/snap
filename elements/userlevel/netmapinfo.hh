@@ -19,7 +19,7 @@ using namespace std;
 CLICK_DECLS
 
 #ifndef NM_BUF_SLOTS
-#define NM_BUF_SLOTS (1<<17)
+#define NM_BUF_SLOTS (1<<19)
 #endif
 
 class NetmapInfo {
@@ -58,6 +58,12 @@ public:
     static int nr_threads;
     static bool initialized;
     static bool need_consumer_locking;
+
+    static int nr_extra_bufs;
+    static ssize_t __buf_start;
+    static uint16_t __nr_buf_size;
+    static void alloc_extra_bufs(int fd);
+    static void free_extra_bufs(int fd);
 
     enum { dev_rx = 0x1, dev_tx = 0x2, FROM_NM = 0x1000 };
 
@@ -121,7 +127,10 @@ public:
 	for (int j=0; j<nr_threads && ring->reserved > 0; ++j)
 	{
 	    i =  (tid+j)%nr_threads;
-	    
+
+/*	    if (j>0)
+		click_chatter("refill from other threads, t %d\n", tid);
+*/	    
 	    if (need_consumer_locking)
 	    {
 		while(atomic_uint32_t::swap(buf_consumer_locks[i], 1) == 1);
@@ -166,7 +175,7 @@ public:
 
     static int register_thread_poll(int fd, Element* e, uint32_t dir);
 
-    static int run_fd_poll(int idx);   
+    static int run_fd_poll(int idx, int times=0);   
 
 };
 

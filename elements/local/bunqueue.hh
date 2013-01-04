@@ -3,10 +3,11 @@
 #include <click/config.h>
 #include <click/element.hh>
 #include <click/glue.hh>
-#include <click/pbatch.hh>
 #include <g4c.h>
 #include <click/error.hh>
 #include <click/ring.hh>
+#include <click/pbatch.hh>
+
 CLICK_DECLS
 
 class BUnqueue : public Element {
