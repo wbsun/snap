@@ -96,7 +96,7 @@ public:
     //
     // Packet slice settings:
     //
-protected:    
+public:    
     int nr_slice_ranges_req;
     struct PSliceRange req_slice_ranges[CLICK_PBATCH_NR_RANGES];
     int nr_slice_ranges;

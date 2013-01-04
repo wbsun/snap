@@ -252,6 +252,8 @@ EthernetBatchProducer::setup_slice_ranges()
 	    req_slice_ranges[0].start_offset;
 	slice_ranges[0].start_offset = 0;
 	slice_ranges[0].len = pslice_real_length(req_slice_ranges[0]);
+	slice_ranges[0].end = slice_ranges[0].start + slice_ranges[0].len;
+	slice_ranges[0].slice_offset = 0;
 	return;
     }
 

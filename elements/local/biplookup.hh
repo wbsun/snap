@@ -21,6 +21,7 @@ public:
     const char *port_count() const	{ return "1/1"; }
     const char *processing() const  { return PUSH; }
 
+    void push(int i, Packet *p);
     void bpush(int i, PBatch *p);
     int configure(Vector<String> &conf, ErrorHandler *errh);
     int initialize(ErrorHandler *errh);
@@ -28,7 +29,7 @@ public:
     virtual int add_route(const IPRoute& route, bool allow_replace,
 			  IPRoute* replaced_route, ErrorHandler* errh);
     virtual int remove_route(const IPRoute& route, IPRoute* removed_route, ErrorHandler* errh);
-    virtual int lookup_route(IPAddress addr, IPAddress& gw);
+    virtual int lookup_route(IPAddress addr, IPAddress& gw) const;
     virtual String dump_routes();
 
     int build_lpmt(vector<g4c_ipv4_rt_entry> &rtes, g4c_lpm_tree *&hlpmt,
@@ -46,5 +47,6 @@ private:
     int16_t _anno_offset;
     int16_t _slice_offset;
 };
+
 CLICK_ENDDECLS
 #endif

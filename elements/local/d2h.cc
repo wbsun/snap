@@ -15,7 +15,7 @@ D2H::~D2H()
 void
 D2H::push(int i, Packet *p)
 {
-    output(0).push(p);
+    output(i).push(p);
 }
 
 void
@@ -26,7 +26,7 @@ D2H::bpush(int i, PBatch *pb)
 	|| pb->producer->test_mode >= BatchProducer::test_mode1
 #endif
 	) {
-	output(0).bpush(pb);
+	output(i).bpush(pb);
 	return;
     }
 
@@ -40,7 +40,7 @@ D2H::bpush(int i, PBatch *pb)
 
     g4c_d2h_async(pb->dwork_ptr, pb->hwork_ptr,
 		  pb->work_size, pb->dev_stream);
-    output(0).bpush(pb);
+    output(i).bpush(pb);
 }
 
 int

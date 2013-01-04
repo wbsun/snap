@@ -28,7 +28,7 @@ H2D::bpush(int i, PBatch *pb)
 	|| pb->producer->test_mode >= BatchProducer::test_mode1
 #endif
 	) {
-	output(0).bpush(pb);
+	output(i).bpush(pb);
 	return;
     }
 
@@ -49,7 +49,7 @@ H2D::bpush(int i, PBatch *pb)
     if (unlikely(_test))
 	hvp_chatter("Copied %d bytes\n", pb->work_size);
 
-    output(0).bpush(pb);
+    output(i).bpush(pb);
 }
 
 void

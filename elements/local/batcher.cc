@@ -24,7 +24,7 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _slice_end = 0;
     _anno_begin = 0;
     _anno_end = 0;
-    _timeout_ms = CLICK_BATCH_TIMEOUT;
+    _timeout_ms = 0;//CLICK_BATCH_TIMEOUT;
     _force_pktlens = false;
     _timed_batch = 0;
     _mt_pushers = false;

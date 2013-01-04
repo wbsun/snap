@@ -20,7 +20,9 @@ BIPLookup::BIPLookup() : _test(false),
     _slice_offset = -1;
 }
 
-BIPLookup::~BIPLookup() {}
+BIPLookup::~BIPLookup()
+{
+}
 
 int
 BIPLookup::configure(Vector<String> &conf, ErrorHandler *errh)
@@ -110,9 +112,9 @@ BIPLookup::remove_route(const IPRoute& route, IPRoute* removed_route, ErrorHandl
 }
 
 int
-BIPLookup::lookup_route(IPAddress addr, IPAddress& gw)
+BIPLookup::lookup_route(IPAddress addr, IPAddress& gw) const
 {
-    // Not called.
+    // Not called
     return 0;
 }
 
@@ -127,17 +129,18 @@ BIPLookup::build_lpmt(vector<g4c_ipv4_rt_entry> &rtes, g4c_lpm_tree *&hlpmt,
 		      g4c_lpm_tree *&dlpmt, int nbits, size_t &tsz, ErrorHandler *errh)
 {
     g4c_ipv4_rt_entry *ents = new g4c_ipv4_rt_entry[rtes.size()];
+    g4c_lpm_tree *t = 0;
     if (!ents) {
 	errh->error("Out of memory for RT entries %lu", rtes.size());
-        goto err_out;
+        goto blerr_out;
     }
 
     memcpy(ents, rtes.data(), sizeof(g4c_ipv4_rt_entry)*rtes.size());
     
-    g4c_lpm_tree *t = g4c_build_lpm_tree(ents, rtes.size(), nbits, 0);
+    t = g4c_build_lpm_tree(ents, rtes.size(), nbits, 0);
     if (!t) {
 	errh->error("LPM tree building error");
-	goto err_out;
+	goto blerr_out;
     }
 
     tsz = sizeof(g4c_lpm_tree);
@@ -153,7 +156,7 @@ BIPLookup::build_lpmt(vector<g4c_ipv4_rt_entry> &rtes, g4c_lpm_tree *&hlpmt,
 	break;
     default:
 	errh->error("FATAL: %d LPM node bits!", nbits);
-	goto err_out;
+	goto blerr_out;
     }
 
     hlpmt = (g4c_lpm_tree*)g4c_alloc_page_lock_mem(tsz);
@@ -163,7 +166,7 @@ BIPLookup::build_lpmt(vector<g4c_ipv4_rt_entry> &rtes, g4c_lpm_tree *&hlpmt,
     } else {
 	errh->error("Out of mem for lpmt, host %p, dev %p, size %lu.",
 		    hlpmt, dlpmt, tsz);
-	goto err_out;
+	goto blerr_out;
     }
 
     free(t);
@@ -171,7 +174,7 @@ BIPLookup::build_lpmt(vector<g4c_ipv4_rt_entry> &rtes, g4c_lpm_tree *&hlpmt,
 
     return 0;
 
-err_out:
+blerr_out:
     if (ents)
 	delete[] ents;
     if (t)
@@ -193,7 +196,7 @@ err_out:
 int
 BIPLookup::initialize(ErrorHandler *errh)
 {
-    if (built_lpmt(_rtes, _hlpmt, _dlpmt, _lpm_bits, _lpm_size, errh))
+    if (build_lpmt(_rtes, _hlpmt, _dlpmt, _lpm_bits, _lpm_size, errh))
 	return -1;
 
     int s = g4c_alloc_stream();
@@ -202,7 +205,7 @@ BIPLookup::initialize(ErrorHandler *errh)
 	return -1;
     }
 
-    g4c_h2d_async(hlpmt, dlpmt, _lpm_size, s);
+    g4c_h2d_async(_hlpmt, _dlpmt, _lpm_size, s);
     g4c_stream_sync(s);
     g4c_free_stream(s);
 
@@ -210,14 +213,25 @@ BIPLookup::initialize(ErrorHandler *errh)
 
     _anno_offset = _batcher->get_anno_offset(0);
     if (_anno_offset < 0) {
-	errh->error("Failed to get anno offset in batch");
+	errh->error("Failed to get anno offset in batch "
+		    "anno start %u, anno len %u "
+		    "w start %u, w len %u",
+		    _batcher->anno_start, _batcher->anno_len,
+		    _batcher->w_anno_start, _batcher->w_anno_len);
 	return -1;
     } else
 	errh->message("BIPLookup anno offset %d", _anno_offset);
 
     _slice_offset = _batcher->get_slice_offset(_psr);
     if (_slice_offset < 0) {
-	errh->error("Failed to get slice offset in batch");
+	errh->error("Failed to get slice offset in batch ranges:");
+	for (int i=0; i<_batcher->nr_slice_ranges; i++) {
+	    errh->error("start %d, off %d, len %d, end %d",
+			_batcher->slice_ranges[i].start,
+			_batcher->slice_ranges[i].start_offset,
+			_batcher->slice_ranges[i].len,
+			_batcher->slice_ranges[i].end);
+	}
 	return -1;
     } else
 	errh->message("BIPLookup slice offset %d", _slice_offset);    
@@ -228,11 +242,11 @@ BIPLookup::initialize(ErrorHandler *errh)
 void
 BIPLookup::bpush(int i, PBatch *p)
 {
-    gpu_ipv4_gpu_lookup_of(_dlpmt,
+    g4c_ipv4_gpu_lookup_of(_dlpmt,
 			   (uint32_t*)p->dslices(), _slice_offset, p->producer->get_slice_stride(),
 			   p->dannos(), _anno_offset, p->producer->get_anno_stride(),
 			   _lpm_bits, p->npkts, p->dev_stream);
-    p->hwork_prt = p->hannos();
+    p->hwork_ptr = p->hannos();
     p->dwork_ptr = p->dannos();
     p->work_size = p->npkts * p->producer->get_anno_stride();
 
@@ -246,6 +260,6 @@ BIPLookup::push(int i, Packet *p)
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(IPRouteTable, Batcher)
+ELEMENT_REQUIRES(IPRouteTable Batcher)
 EXPORT_ELEMENT(BIPLookup)
 ELEMENT_LIBS(-lg4c)

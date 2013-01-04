@@ -105,8 +105,8 @@ IPRouteTable::configure(Vector<String> &conf, ErrorHandler *errh)
 	    errh->error("argument %d should be %<ADDR/MASK [GATEWAY] OUTPUT%>", i+1);
 	    r = -EINVAL;
 	} else if (route.port < 0 || route.port >= noutputs()) {
-	    errh->error("argument %d bad OUTPUT", i+1);
-	    r = -EINVAL;
+	    errh->warning("argument %d bad OUTPUT", i+1);
+	    //r = -EINVAL;
 	} else if ((r1 = add_route(route, false, 0, errh)) < 0) {
 	    if (r1 == -EEXIST)
 		++eexist;

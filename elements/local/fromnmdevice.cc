@@ -55,7 +55,7 @@ int
 FromNMDevice::configure(Vector<String> &conf,
 			ErrorHandler *errh)
 {
-    bool promisc = false, outbound = false,
+    bool promisc = true, outbound = false,
 	sniffer = true, timestamp = false;
     _snaplen = default_snaplen;
     _headroom = Packet::default_headroom;

@@ -126,7 +126,7 @@ void
 GPURuntime::cleanup(CleanupStage stage)
 {
     if (stage >= CLEANUP_CONFIGURED) {		
-	g4c_exit();
+	//g4c_exit(); //comment for reducing errors..
 	hvp_chatter("G4C GPU runtime cleaned up.\n");
     }
 }
