@@ -154,7 +154,11 @@ Batcher::init_batch_after_create(PBatch *pb)
 
         pb->hwork_ptr = pb->host_mem;
 	pb->dwork_ptr = pb->dev_mem;
-	pb->work_size = (int)this->mem_size;
+
+	if (has_annos() && r_anno_len == 0) {
+	    pb->work_size = this->annos_offset;
+	} else
+	    pb->work_size = (int)this->mem_size;
     }
     
     return 0;
@@ -177,7 +181,11 @@ Batcher::finit_batch_for_recycle(PBatch *pb)
 
     pb->hwork_ptr = pb->host_mem;
     pb->dwork_ptr = pb->dev_mem;
-    pb->work_size = (int)this->mem_size;
+
+    if (has_annos() && r_anno_len == 0) {
+	    pb->work_size = this->annos_offset;
+	} else
+	    pb->work_size = (int)this->mem_size;
 
     return 0;
 }
@@ -366,7 +374,7 @@ Batcher::add_packet(Packet *p)
 	*_batch->length_hptr(idx) = (int16_t)plen;
     }
 
-    if (this->has_annos()) {
+    if (this->has_annos() && r_anno_len > 0) {
 	memcpy(_batch->anno_hptr(idx),
 	       g4c_ptr_add(p->anno(), this->anno_start),
 	       this->anno_len);
