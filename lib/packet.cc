@@ -228,8 +228,8 @@ Packet::~Packet()
 
 # if HAVE_CLICK_PACKET_POOL
 #  define CLICK_PACKET_POOL_BUFSIZ		2048
-#  define CLICK_PACKET_POOL_SIZE		(1<<20) // see LIMIT in packetpool-01.testie
-#  define CLICK_GLOBAL_PACKET_POOL_COUNT	8
+#  define CLICK_PACKET_POOL_SIZE		(1<<19) // see LIMIT in packetpool-01.testie
+#  define CLICK_GLOBAL_PACKET_POOL_COUNT	16
 namespace {
 struct PacketData {
     PacketData *next;

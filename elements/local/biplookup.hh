@@ -6,7 +6,7 @@
 #include <click/pbatch.hh>
 #include "batcher.hh"
 #include <g4c.h>
-#include <g4c_lookup.h>
+#include <g4c_lpm.h>
 #include <vector>
 using namespace std;
 

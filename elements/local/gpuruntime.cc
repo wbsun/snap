@@ -8,7 +8,7 @@
 #include <click/packet.hh>
 #include <g4c.h>
 #include <g4c_ac.h>
-#include <g4c_lookup.h>
+#include <g4c_lpm.h>
 CLICK_DECLS
 
 GPURuntime::GPURuntime() {

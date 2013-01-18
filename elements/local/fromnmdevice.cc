@@ -182,8 +182,10 @@ FromNMDevice::emit_packet(WritablePacket *p,
     else
 	checked_output_push(1, p);
 #endif
-    if (p)
+    if (p) {
+	p->set_mac_header(p->data());
 	output(0).push(p);
+    }
 }
 
 int
@@ -218,7 +220,7 @@ FromNMDevice::netmap_dispatch()
 	    continue;
 	}	
 
-	//int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
+	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 
 	while (n != _burst &&
 	       ring->avail > 0) {
@@ -230,17 +232,18 @@ FromNMDevice::netmap_dispatch()
 		(unsigned char *) NETMAP_BUF(ring, buf_idx);
 
 	    WritablePacket *p;
-	    //if (nzcopy > 0) {
+	    if (1//nzcopy > 0
+		) {
 		p = Packet::make(buf,
 				 ring->slot[cur].len,
 				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
-		//	--nzcopy;
-	    // } else {
-		// p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
-		// unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
-		// ring->slot[res1idx].buf_idx = buf_idx;
-	    // }
+			--nzcopy;
+	     } else {
+		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
+		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);
+		ring->slot[res1idx].buf_idx = buf_idx;
+	    }
 
 	    ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 	    --ring->avail;

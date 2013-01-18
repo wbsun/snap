@@ -233,6 +233,7 @@ ToNMDevice::run_task(Task *)
 {
     int r = 0;
     if (_full_nm) {
+	click_chatter("run task of tonmdev t %d\n", click_current_thread_id);
 	r = NetmapInfo::run_fd_poll(_nm_fd, _full_nm-1);
 
 	if (r > 0) {
