@@ -46,6 +46,7 @@ private:
     PSliceRange _psr;
     int16_t _anno_offset;
     int16_t _slice_offset;
+    int _on_cpu;
 };
 
 CLICK_ENDDECLS

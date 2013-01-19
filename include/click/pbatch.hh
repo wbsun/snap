@@ -138,7 +138,7 @@ public:
     uint8_t anno_len;
 
 public:
-    enum {anno_write = 0x1, anno_read = 0x2};
+    enum {anno_write = 0x1, anno_read = 0x2, anno_ondev = 0x4};
 
     virtual void init_anno();    
     virtual int req_anno(uint8_t start, uint8_t len, uint8_t rw);

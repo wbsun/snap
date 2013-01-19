@@ -45,6 +45,7 @@ FromNMDevice::FromNMDevice()
     _full_nm = 1;
     _nm_fd = -1;
     _fd_added = false;
+    _allow_nz = false;
 }
 
 FromNMDevice::~FromNMDevice()
@@ -83,6 +84,7 @@ FromNMDevice::configure(Vector<String> &conf,
 	.read("TEST", _test)
 	.read("FULL_NM", _full_nm)
 	.read("NMEXBUF", _nm_exbuf)
+	.read{"ALLOW_NZ", _allow_nz)
 	.complete() < 0)
 	return -1;
     if (_snaplen > 8190 || _snaplen < 14)
@@ -232,13 +234,13 @@ FromNMDevice::netmap_dispatch()
 		(unsigned char *) NETMAP_BUF(ring, buf_idx);
 
 	    WritablePacket *p;
-	    if (1//nzcopy > 0
-		) {
+	    if (!_allow_nz || nzcopy > 0)
+	    {
 		p = Packet::make(buf,
 				 ring->slot[cur].len,
 				 NetmapInfo::buffer_destructor);
 		++ring->reserved;
-			--nzcopy;
+		--nzcopy;
 	     } else {
 		p = Packet::make(_headroom, buf, ring->slot[cur].len, 0);
 		unsigned res1idx = NETMAP_RING_FIRST_RESERVED(ring);

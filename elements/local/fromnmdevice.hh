@@ -74,6 +74,8 @@ class FromNMDevice : public Element { public:
     int _snaplen;
     unsigned _headroom;
 
+    bool _allow_nz;
+
     static String read_handler(Element*, void*);
     static int write_handler(const String&, Element*, void*,
 			     ErrorHandler*);
