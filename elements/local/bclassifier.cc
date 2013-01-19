@@ -104,7 +104,7 @@ BClassifier::initialize(ErrorHandler *errh)
     
     int s = g4c_alloc_stream();
     if (!s) {
-	errh->error("Failed to alloc stream for LPM copy");
+	errh->error("Failed to alloc stream for classifier copy");
 	return -1;
     }
 
@@ -118,6 +118,8 @@ BClassifier::initialize(ErrorHandler *errh)
 	return -1;
     } else {
 	errh->message("Classifier built for host and device.");
+	if (_test > 2)
+	    free(ptns);
     }
 
     g4c_free_stream(s);

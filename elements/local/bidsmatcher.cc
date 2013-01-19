@@ -15,6 +15,7 @@ BIDSMatcher::BIDSMatcher() : _test(0),
     _anno_offset = -1;
     _slice_offset = -1;
     _on_cpu = 0;
+    _rand_pattern_max_len = 32;
 }
 
 BIDSMatcher::~BIDSMatcher()
@@ -26,20 +27,21 @@ BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_kparse(conf, this, errh,
 		     "BATCHER", cpkM, cpElementCast, "Batcher", &_batcher,
-		     "TEST", cpkN, cpInteger, &_test,		     
+		     "TEST", cpkN, cpInteger, &_test,
+		     "PTNLEN", cpkN, cpInteger, &_rand_pattern_max_len,
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
 		     cpEnd) < 0)
 	return -1;
     
     if (_on_cpu < 2)
-	if (_batcher->req_anno(4, 4, BatchProducer::anno_write)) {
+	if (_batcher->req_anno(8, 4, BatchProducer::anno_write)) {
 	    errh->error("Register annotation request in batcher failed");
 	    return -1;
 	}
 
-    _psr.start = EthernetBatchProducer::ip4_hdr;
-    _psr.start_offset = 8; // TTL
-    _psr.len = 16;
+    _psr.start = EthernetBatchProducer::udp4_payload;
+    _psr.start_offset = 0; // TTL
+    _psr.len = 512;
     _psr.end = _psr.start+_psr.start_offset+_psr.len;
 
     if (_on_cpu < 2)
@@ -58,72 +60,72 @@ BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
     return 0;
 }
 
-void
-BIDSMatcher::generate_random_patterns(g4c_pattern_t *ptns, int n)
+char**
+BIDSMatcher::generate_random_patterns(int np, int plen)
 {
     struct timeval tv;
     gettimeofday(&tv, 0);
 
     srandom((unsigned)(tv.tv_usec));
 
-    for (int i=0; i<n; i++) {
-	int nbits = random()%5;
-	ptns[i].nr_src_netbits = nbits*8;
-	for (int j=0; j<nbits; j++)
-	    ptns[i].src_addr = (ptns[i].src_addr<<8)|(random()&0xff);
-	nbits = random()%5;
-	ptns[i].nr_dst_netbits = nbits*8;
-	for (int j=0; j<nbits; j++)
-	    ptns[i].dst_addr = (ptns[i].dst_addr<<8)|(random()&0xff);
-	ptns[i].src_port = random()%(PORT_STATE_SIZE<<1);
-	if (ptns[i].src_port >= PORT_STATE_SIZE)
-	    ptns[i].src_port -= PORT_STATE_SIZE*2;
-	ptns[i].dst_port = random()%(PORT_STATE_SIZE<<1);
-	if (ptns[i].dst_port >= PORT_STATE_SIZE)
-	    ptns[i].dst_port -= PORT_STATE_SIZE*2;
-	ptns[i].proto = random()%(PROTO_STATE_SIZE);
-	ptns[i].idx = i;
+    size_t tsz = np*sizeof(char*) + np*(plen);
+
+    char *p = (char*)malloc(tsz);
+    if (!p)
+	return 0;
+
+    char *ptn = p+np*sizeof(char*);
+    char **pp = (char**)p;
+
+    for (int i=0; i<np; i++) {
+	pp[i] = ptn;
+	int j;
+	int mylen = (random()%(plen-4)) + 3;
+	for (j=0; j<mylen; j++)
+	    ptn[j] = (char)(random()%60 + 'A');
+	ptn[j] = (char)0;
+	ptn += plen;
     }
+
+    return pp;
 }
 
 int
 BIDSMatcher::initialize(ErrorHandler *errh)
 {
-    g4c_pattern_t *ptns = 0;
+    char **ptns = 0;
     int nptns = 0;
     if (_test > 2) {
-	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*_test);
+	ptns = generate_random_patterns(_test, _rand_pattern_max_len);
 	if (!ptns) {
 	    errh->error("Failed to alloc mem for patterns");
 	    return -1;
 	}
-	memset(ptns, 0, sizeof(g4c_pattern_t)*_test);
-	generate_random_patterns(ptns, _test);
 	nptns = _test;
     }
     
     int s = g4c_alloc_stream();
     if (!s) {
-	errh->error("Failed to alloc stream for LPM copy");
+	errh->error("Failed to alloc stream for IDS matcher copy");
 	return -1;
     }
 
-    gcl = g4c_create_classifier(ptns, nptns, 1, s);
-    if (!gcl || !gcl->devmem) {
-	errh->error("Failed to create classifier");
+    _acm = g4c_create_matcher(ptns, nptns, 1, s);
+    if (!_acm || !_acm->devmem) {
+	errh->error("Failed to create acm");
 	if (_test > 2) {
 	    g4c_free_stream(s);
 	    free(ptns);
 	}
 	return -1;
     } else {
-	errh->message("Classifier built for host and device.");
+	errh->message("ACM built for host and device.");
     }
 
     g4c_free_stream(s);
 
     if (_on_cpu < 2) {
-	_anno_offset = _batcher->get_anno_offset(4);
+	_anno_offset = _batcher->get_anno_offset(8);
 	if (_anno_offset < 0) {
 	    errh->error("Failed to get anno offset in batch "
 			"anno start %u, anno len %u "
@@ -148,8 +150,8 @@ BIDSMatcher::initialize(ErrorHandler *errh)
 	} else
 	    errh->message("BIDSMatcher slice offset %d", _slice_offset);
     } else {
-	_anno_offset = 4;
-	_slice_offset = 22; // IP dst
+	_anno_offset = 8;
+	_slice_offset = EthernetBatchProducer::udp4_payload;
     }
 	
     return 0;
@@ -159,13 +161,12 @@ void
 BIDSMatcher::bpush(int i, PBatch *p)
 {
     if (!_on_cpu) {
-	g4c_gpu_classify_pkts(
-	    (g4c_classifier_t*)gcl->devmem,
+	g4c_gpu_acm_match(
+	    (g4c_acm_t*)_acm->devmem,
 	    p->npkts,
 	    p->dslices(),
 	    p->producer->get_slice_stride(),
 	    _slice_offset,
-	    _slice_offset+12,
 	    (int*)p->dannos(),
 	    p->producer->get_anno_stride()/sizeof(int),
 	    _anno_offset/sizeof(int),
@@ -177,10 +178,10 @@ BIDSMatcher::bpush(int i, PBatch *p)
     } else {
 	for(int j=0; j<p->npkts; j++) {
 	    *(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
-		g4c_cpu_classify_pkt(
-		    gcl,
-		    g4c_ptr_add(p->slice_hptr(j),
-				_slice_offset));
+		g4c_cpu_acm_match(
+		    _acm,
+		    g4c_ptr_add(p->slice_hptr(j), _slice_offset),
+		    p->producer->get_slice_stride() - _slice_offset);
 	}
     }
     output(0).bpush(p);
@@ -193,7 +194,9 @@ BIDSMatcher::push(int i, Packet *p)
 	hvp_chatter("Should never call this: %d, %p\n", i, p);
     else {
 	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-	    g4c_cpu_classify_pkt(gcl, g4c_ptr_add(p->data(), _slice_offset));
+	    g4c_cpu_acm_match(_acm,
+			      g4c_ptr_add(p->data(), _slice_offset),
+			      p->length()-_slice_offset);
 	output(0).push(p);
     }
 }

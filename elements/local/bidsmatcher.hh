@@ -27,10 +27,11 @@ public:
     int initialize(ErrorHandler *errh);
 
 private:
-    void generate_random_patterns(g4c_pattern_t *ptns, int n);
+    char ** generate_random_patterns(int np, int plen);
     Batcher* _batcher;
-    g4c_classifier_t *gcl;
+    g4c_acm_t *_acm;
     int _test;
+    int _rand_pattern_max_len;
     PSliceRange _psr;
     int16_t _anno_offset;
     int16_t _slice_offset;
