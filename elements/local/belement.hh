@@ -5,7 +5,7 @@
 #include <click/pbatch.hh>
 CLICK_DECLS
 
-class BElement :: public Element {
+class BElement : public Element {
 public:
     BElement();
     virtual ~BElement();

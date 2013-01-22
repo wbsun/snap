@@ -5,9 +5,10 @@
 #include <click/confparse.hh>
 #include <click/args.hh>
 #include "belement.hh"
+
 CLICK_DECLS
 
-BElement::BElement() : 
+BElement::BElement()
 {
 }
 

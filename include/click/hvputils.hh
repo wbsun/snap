@@ -7,6 +7,6 @@
     do {							  \
 	__hvp_chatter("@%s::%d: ", __FILE__, __LINE__);		  \
 	__hvp_chatter( __VA_ARGS__);				  \
-    } while(0);							  \
+    } while(0)							  \
     
 #endif

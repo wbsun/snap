@@ -84,7 +84,7 @@ FromNMDevice::configure(Vector<String> &conf,
 	.read("TEST", _test)
 	.read("FULL_NM", _full_nm)
 	.read("NMEXBUF", _nm_exbuf)
-	.read{"ALLOW_NZ", _allow_nz)
+	.read("ALLOW_NZ", _allow_nz)
 	.complete() < 0)
 	return -1;
     if (_snaplen > 8190 || _snaplen < 14)

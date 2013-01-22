@@ -54,7 +54,7 @@ BIPLookup::configure(Vector<String> &conf, ErrorHandler *errh)
     _rtes.reserve(rts.size());
 
     if (cp_va_kparse(myconf, this, errh,
-		     "BATCHER", cpkM, cpElementCast, "Batcher", &_batcher,
+		     "BATCHER", cpkN, cpElementCast, "Batcher", &_batcher,
 		     "TEST", cpkN, cpBool, &_test,
 		     "NBITS", cpkN, cpInteger, &_lpm_bits,
 		     "CPU", cpkN, cpInteger, &_on_cpu,
@@ -261,12 +261,21 @@ BIPLookup::bpush(int i, PBatch *p)
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride();
     } else {
-	for(int j=0; j<p->npkts; j++) {
-	    *(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
-		g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->slice_hptr(j), _slice_offset)));
+	if (_on_cpu < 2)
+	    for(int j=0; j<p->npkts; j++) {
+		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
+		    g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->slice_hptr(j), _slice_offset)));
+	    }
+	else {
+	    for (int j=0; j<p->npkts; j++) {
+		Packet *pkt = p->pptrs[j];
+		*(int*)(g4c_ptr_add(pkt->anno(), _anno_offset)) =
+		    g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(pkt->data(),
+								     _slice_offset)));
+	    }
 	}
     }
-    output(0).bpush(p);
+    output(i).bpush(p);
 }
 
 void
@@ -278,7 +287,7 @@ BIPLookup::push(int i, Packet *p)
 	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
 	    g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->data(),
 							     _slice_offset)));
-	output(0).push(p);
+	output(i).push(p);
     }
 }
 

@@ -18,7 +18,7 @@ public:
     ~BClassifier();
     
     const char *class_name() const	{ return "BClassifier"; }
-    const char *port_count() const	{ return "1/1"; }
+    const char *port_count() const	{ return "1-/="; }
     const char *processing() const  { return PUSH; }
 
     void push(int i, Packet *p);

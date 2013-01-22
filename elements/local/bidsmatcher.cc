@@ -26,7 +26,7 @@ int
 BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_kparse(conf, this, errh,
-		     "BATCHER", cpkM, cpElementCast, "Batcher", &_batcher,
+		     "BATCHER", cpkN, cpElementCast, "Batcher", &_batcher,
 		     "TEST", cpkN, cpInteger, &_test,
 		     "PTNLEN", cpkN, cpInteger, &_rand_pattern_max_len,
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
@@ -34,14 +34,14 @@ BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 	return -1;
     
     if (_on_cpu < 2)
-	if (_batcher->req_anno(8, 4, BatchProducer::anno_write)) {
+	if (_batcher->req_anno(0, 4, BatchProducer::anno_write)) {
 	    errh->error("Register annotation request in batcher failed");
 	    return -1;
 	}
 
     _psr.start = EthernetBatchProducer::udp4_payload;
     _psr.start_offset = 0; // TTL
-    _psr.len = 512;
+    _psr.len = 24;
     _psr.end = _psr.start+_psr.start_offset+_psr.len;
 
     if (_on_cpu < 2)
@@ -77,17 +77,30 @@ BIDSMatcher::generate_random_patterns(int np, int plen)
     char *ptn = p+np*sizeof(char*);
     char **pp = (char**)p;
 
-    for (int i=0; i<np; i++) {
+    for (int i=0; i<np; i+=32) {
 	pp[i] = ptn;
 	int j;
 	int mylen = (random()%(plen-4)) + 3;
 	for (j=0; j<mylen; j++)
-	    ptn[j] = (char)(random()%60 + 'A');
+	    ptn[j] = (char)(random()%40 + 'A');
 	ptn[j] = (char)0;
 	ptn += plen;
+
+	// simulating common prefix:
+	for (int k=1; k<=31; k++) {
+	    if (i+k == np)
+		return pp;
+	    
+	    pp[i+k] = ptn;
+	    for (j=0; j<mylen-1; j++)
+		ptn[j] = pp[i][j];
+	    ptn[j] = (char)(random()%40+'A');
+	    ptn[j+1] = (char)0;
+	    ptn += plen;
+	}
     }
 
-    return pp;
+    return pp;   
 }
 
 int
@@ -125,7 +138,7 @@ BIDSMatcher::initialize(ErrorHandler *errh)
     g4c_free_stream(s);
 
     if (_on_cpu < 2) {
-	_anno_offset = _batcher->get_anno_offset(8);
+	_anno_offset = _batcher->get_anno_offset(0);
 	if (_anno_offset < 0) {
 	    errh->error("Failed to get anno offset in batch "
 			"anno start %u, anno len %u "
@@ -150,7 +163,7 @@ BIDSMatcher::initialize(ErrorHandler *errh)
 	} else
 	    errh->message("BIDSMatcher slice offset %d", _slice_offset);
     } else {
-	_anno_offset = 8;
+	_anno_offset = 0;
 	_slice_offset = EthernetBatchProducer::udp4_payload;
     }
 	
@@ -167,37 +180,48 @@ BIDSMatcher::bpush(int i, PBatch *p)
 	    p->dslices(),
 	    p->producer->get_slice_stride(),
 	    _slice_offset,
+	    0,
 	    (int*)p->dannos(),
 	    p->producer->get_anno_stride()/sizeof(int),
 	    _anno_offset/sizeof(int),
-	    p->dev_stream);
+	    p->dev_stream, 0);
 		
 	p->hwork_ptr = p->hannos();
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride();
     } else {
-	for(int j=0; j<p->npkts; j++) {
-	    *(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
-		g4c_cpu_acm_match(
-		    _acm,
-		    g4c_ptr_add(p->slice_hptr(j), _slice_offset),
-		    p->producer->get_slice_stride() - _slice_offset);
+	if (_on_cpu < 2) {
+	    for(int j=0; j<p->npkts; j++) {
+		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
+		    g4c_cpu_acm_match(
+			_acm,
+			(uint8_t*)g4c_ptr_add(p->slice_hptr(j), _slice_offset),
+			p->producer->get_slice_stride() - _slice_offset);
+	    }
+	} else {
+	    for (int j=0; j<p->npkts; j++) {
+		Packet *pkt = p->pptrs[j];
+		*(int*)(g4c_ptr_add(pkt->anno(), _anno_offset)) =
+		    g4c_cpu_acm_match(_acm,
+				      (uint8_t*)g4c_ptr_add(pkt->data(), _slice_offset),
+				      pkt->length()-_slice_offset);
+	    }
 	}
     }
-    output(0).bpush(p);
+    output(i).bpush(p);
 }
 
 void
 BIDSMatcher::push(int i, Packet *p)
 {
     if (_on_cpu < 2)
-	hvp_chatter("Should never call this: %d, %p\n", i, p);
+	click_chatter("Should never call this: %d, %p\n", i, p);
     else {
 	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
 	    g4c_cpu_acm_match(_acm,
-			      g4c_ptr_add(p->data(), _slice_offset),
+			      (uint8_t*)g4c_ptr_add(p->data(), _slice_offset),
 			      p->length()-_slice_offset);
-	output(0).push(p);
+	output(i).push(p);
     }
 }
 
