@@ -68,10 +68,11 @@ Batcher::init_pb_pool()
     
     hvp_chatter("Batcher pool, %s %d pools, "
 		"%s alloc locking, "
-		"%s free locking.\n",
+		"%s free locking, %lu sz.\n",
 		(_forced_nr_pools?"forced":"per-thread"),
 		_nr_pools, _need_alloc_locking?"need":"no",
-		_need_free_locking?"need":"no");
+		_need_free_locking?"need":"no",
+		this->mem_size);
 
     _pb_pools = new LFRing<PBatch*>[_nr_pools];
     _pb_alloc_locks = new uint32_t[_nr_pools];
@@ -491,7 +492,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 
     if (_anno_end != 0) {
 	this->req_anno(_anno_begin, _anno_end-_anno_begin,
-		       anno_write|anno_read);
+		       anno_write);
     }
 
 #ifndef CLICK_NO_BATCH_TEST

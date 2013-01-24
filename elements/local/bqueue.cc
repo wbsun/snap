@@ -4,12 +4,12 @@
 #include <click/confparse.hh>
 #include <click/timestamp.hh>
 #include <click/atomic.hh>
-#include "bunqueue.hh"
+#include "bqueue.hh"
 CLICK_DECLS
 
-const int BUnqueue::DEFAULT_LEN = (int)(1<<3);
+const int BQueue::DEFAULT_LEN = (int)(1<<3);
 
-BUnqueue::BUnqueue()
+BQueue::BQueue()
 {
     _que_len = DEFAULT_LEN;
     _drops = 0;
@@ -20,12 +20,12 @@ BUnqueue::BUnqueue()
     _checks = 0;
 }
 
-BUnqueue::~BUnqueue()
+BQueue::~BQueue()
 {
 }
 
 int
-BUnqueue::configure(Vector<String> &conf, ErrorHandler *errh)
+BQueue::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     int ql = -1;
     
@@ -39,7 +39,7 @@ BUnqueue::configure(Vector<String> &conf, ErrorHandler *errh)
     if (ql != -1) {
 	_que_len = ql;
 	if (__builtin_popcount(ql>>1) != 1) {
-	    errh->fatal("BUnqueue queue length %d is not"
+	    errh->fatal("BQueue queue length %d is not"
 			"power of 2.", ql);
 	    return -1;
 	}
@@ -49,10 +49,10 @@ BUnqueue::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-BUnqueue::initialize(ErrorHandler *errh)
+BQueue::initialize(ErrorHandler *errh)
 {
     if (!_que.reserve(_que_len)) {
-        errh->fatal("BUnqueue failed to reserve batch queue.\n");
+        errh->fatal("BQueue failed to reserve batch queue.\n");
 	return -1;
     }
     
@@ -60,20 +60,15 @@ BUnqueue::initialize(ErrorHandler *errh)
 }
 
 void
-BUnqueue::push(int, Packet* p)
+BQueue::push(int, Packet* p)
 {
     output(0).push(p);
 }
 
 
-Packet *
-BUnqueue::pull(int)
-{
-    hvp_chatter("Error: BUnqueue's pull should not be called!\n");
-}
 
 void
-BUnqueue::bpush(int i, PBatch *pb)
+BQueue::bpush(int i, PBatch *pb)
 {
 //    while(atomic_uint32_t::swap(_q_prod_lock, 1) == 1);
 
@@ -117,44 +112,6 @@ BUnqueue::bpush(int i, PBatch *pb)
     // _q_prod_lock = 0;    
 }
 
-PBatch *
-BUnqueue::bpull(int port)
-{
-    if (_que.empty()) {
-	return 0;
-    }
-    else {
-//	while(atomic_uint32_t::swap(_q_cons_lock, 1) == 1);
-	
-	PBatch *pb = _que.oldest();
-/*	if (pb->host_mem == 0) {
-	    if (_test)
-		hvp_chatter("batch %p done\n", pb);
-	    _que.remove_oldest();
-	    return pb;
-	}
-*/
-	
-	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream)) {
-	    _que.remove_oldest_with_wmb();
-
-// 	    click_compiler_fence();
-	    // _q_cons_lock = 0;
-
-	    if (_test)
-		hvp_chatter("batch %p done at %s\n", pb,
-			    Timestamp::now().unparse().c_str());
-	    return pb;
-	} else {
-	    //_que.remove_oldest();
-// 	    click_compiler_fence();
-	    // _q_cons_lock = 0;
-	    //pb->kill();
-	    return 0;
-	}
-    }
-}
-
 CLICK_ENDDECLS
-EXPORT_ELEMENT(BUnqueue)
+EXPORT_ELEMENT(BQueue)
 ELEMENT_LIBS(-lg4c)

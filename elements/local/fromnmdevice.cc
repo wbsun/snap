@@ -207,7 +207,7 @@ FromNMDevice::netmap_dispatch()
 			  ring->reserved);
 //	oldres = ring->reserved;
 
-	NetmapInfo::refill(ring);
+	//NetmapInfo::refill(ring);
 	if (unlikely(_test))
 	    click_chatter("after refill: "
 			  "netmap ring %u slots, av %u, ring %u, resv %u",
@@ -219,6 +219,8 @@ FromNMDevice::netmap_dispatch()
 			  // ri, ring->avail, ring->reserved);
 
 	if (ring->avail == 0) {
+	    if (ring->reserved > 0)
+		NetmapInfo::refill(ring);
 	    continue;
 	}	
 

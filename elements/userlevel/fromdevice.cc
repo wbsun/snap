@@ -100,6 +100,8 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     _burst = 1;
 #if FROMDEVICE_ALLOW_NETMAP
     _ringid = -1;
+    int _nm_exbuf = 0;
+    _allow_nz = true;
 #endif
     String bpf_filter, capture, encap_type;
     bool has_encap;
@@ -119,6 +121,8 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("TIMESTAMP", timestamp)
 #if FROMDEVICE_ALLOW_NETMAP
 	.read("RING", _ringid)
+	.read("NMEXBUF", _nm_exbuf)
+	.read("ALLOW_NZ", _allow_nz)
 #endif
 	.complete() < 0)
 	return -1;
@@ -169,6 +173,8 @@ FromDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     if (_method == method_default || _method == method_netmap) {
 	NetmapInfo::register_buf_consumer();
 	NetmapInfo::set_dev_dir(_ifname.c_str(), NetmapInfo::dev_rx);
+	if (_nm_exbuf > 0)
+	    NetmapInfo::nr_extra_bufs = _nm_exbuf;
     }
 #endif
 
@@ -498,15 +504,20 @@ FromDevice::netmap_dispatch()
 	struct netmap_ring *ring = NETMAP_RXRING(_netmap.nifp, ri);
 	//click_chatter("netmap dispatch %s %u %u %u %u", _ifname.c_str(), ri, ring->cur, ring->reserved, ring->avail);
 
-	while (ring->reserved > 0 && NetmapInfo::refill(ring))
+	if (_allow_nz) {
+	    while (ring->reserved > 0 && NetmapInfo::refill(ring))
 	    /* click_chatter("Refilled") */;
+	}
 
 	// click_chatter("netmap ring %u slots, av %u, rings %u",
 		      // ring->num_slots, ring->avail,
 		      // _netmap.ring_end - _netmap.ring_begin);
 
-	if (ring->avail == 0)
+	if (ring->avail == 0) {
+	    if (ring->reserved > 0)
+		NetmapInfo::refill(ring);
 	    continue;
+	}
 
 	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
 
@@ -518,7 +529,7 @@ FromDevice::netmap_dispatch()
 	    unsigned char *buf = (unsigned char *) NETMAP_BUF(ring, buf_idx);
 
 	    WritablePacket *p;
-	    if (nzcopy > 0) {
+	    if (!_allow_nz || nzcopy > 0) {
 		p = Packet::make(buf, ring->slot[cur].len, NetmapInfo::buffer_destructor);
 		++ring->reserved;
 		--nzcopy;
@@ -531,8 +542,12 @@ FromDevice::netmap_dispatch()
 	    --ring->avail;
 	    ++n;
 
-	    emit_packet(p, 0, ring->ts);
+	    if (p)
+		emit_packet(p, 0, ring->ts);
+	    
 	}
+	if (!_allow_nz)
+	    NetmapInfo::refill(ring);
     }
     return n;
 }

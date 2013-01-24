@@ -79,7 +79,9 @@ struct PSliceRange {
  */
 class BatchProducer {
 public:
+    bool setup_done;
     BatchProducer() {
+	setup_done = false;
 	this->init_slice_ranges();
 	this->init_anno();
 	this->init_mm();
@@ -144,7 +146,9 @@ public:
     virtual int req_anno(uint8_t start, uint8_t len, uint8_t rw);
     virtual void setup_anno();
     virtual int8_t get_anno_offset(uint8_t start);
-    virtual uint8_t get_anno_stride() { return anno_len; }
+    virtual uint8_t get_anno_stride() {
+	return anno_len;
+    }
     
     //
     // Memory management:
@@ -165,9 +169,12 @@ public:
     virtual void init_mm();
     virtual void setup_mm();
 
-    inline bool has_lens() { return lens_offset >= 0; }
-    inline bool has_slices() { return slices_offset >= 0; }
-    inline bool has_annos() { return annos_offset >= 0; }
+    inline bool has_lens() {
+	return lens_offset >= 0; }
+    inline bool has_slices() {
+	return slices_offset >= 0; }
+    inline bool has_annos() {
+	return annos_offset >= 0; }
 
 
     //
@@ -188,9 +195,14 @@ public:
 public:
     // Call after init_xxx, req_xxx, set_xxx:
     virtual void setup_all() {
+	if (setup_done)
+	    return;
+	
 	this->setup_anno();
 	this->setup_slice_ranges();
 	this->setup_mm();
+	this->init_priv_data();
+	setup_done = true;
     }
 
     //

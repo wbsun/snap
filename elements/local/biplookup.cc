@@ -60,6 +60,11 @@ BIPLookup::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "CPU", cpkN, cpInteger, &_on_cpu,
 		     cpEnd) < 0)
 	return -1;
+
+    if (_on_cpu == 3) {
+	errh->message("Skip mode.");
+	return 0;
+    }
     
     switch(_lpm_bits) {
     case 1:
@@ -72,13 +77,13 @@ BIPLookup::configure(Vector<String> &conf, ErrorHandler *errh)
     }
 
     if (_on_cpu < 2)
-	if (_batcher->req_anno(0, 1, BatchProducer::anno_write)) {
+	if (_batcher->req_anno(0, 4, BatchProducer::anno_write)) {
 	    errh->error("Register annotation request in batcher failed");
 	    return -1;
 	}
 
-    _psr.start = EthernetBatchProducer::ip4_hdr;
-    _psr.start_offset = 16; // Dst IP Addr offset
+    _psr.start = EthernetBatchProducer::ip4_hdr + 16; // 14
+    _psr.start_offset = 0; // Dst IP Addr offset
     _psr.len = 4;
     _psr.end = _psr.start+_psr.start_offset+_psr.len;
 
@@ -87,7 +92,9 @@ BIPLookup::configure(Vector<String> &conf, ErrorHandler *errh)
 	    errh->error("Request slice range failed: %d, %d, %d, %d",
 			_psr.start, _psr.start_offset, _psr.len, _psr.end);
 	    return -1;
-	}
+	} else
+	    errh->message("Request slice range: %d, %d, %d, %d",
+			_psr.start, _psr.start_offset, _psr.len, _psr.end);
 
     if (IPRouteTable::configure(rts, errh))
 	return -1;
@@ -200,6 +207,9 @@ blerr_out:
 int
 BIPLookup::initialize(ErrorHandler *errh)
 {
+    if (_on_cpu == 3)
+	return 0;
+    
     if (build_lpmt(_rtes, _hlpmt, _dlpmt, _lpm_bits, _lpm_size, errh))
 	return -1;
 
@@ -216,6 +226,7 @@ BIPLookup::initialize(ErrorHandler *errh)
     errh->message("LPM tree built and copied to GPU.");
 
     if (_on_cpu < 2) {
+	_batcher->setup_all();
 	_anno_offset = _batcher->get_anno_offset(0);
 	if (_anno_offset < 0) {
 	    errh->error("Failed to get anno offset in batch "
@@ -238,8 +249,16 @@ BIPLookup::initialize(ErrorHandler *errh)
 			    _batcher->slice_ranges[i].end);
 	    }
 	    return -1;
-	} else
+	} else {
 	    errh->message("BIPLookup slice offset %d", _slice_offset);
+	    for (int i=0; i<_batcher->nr_slice_ranges; i++) {
+		errh->message("start %d, off %d, len %d, end %d",
+			    _batcher->slice_ranges[i].start,
+			    _batcher->slice_ranges[i].start_offset,
+			    _batcher->slice_ranges[i].len,
+			    _batcher->slice_ranges[i].end);
+	    }
+	}
     } else {
 	_anno_offset = 0;
 	_slice_offset = 30; // IP dst
@@ -252,6 +271,8 @@ void
 BIPLookup::bpush(int i, PBatch *p)
 {
     if (!_on_cpu) {
+	if (!p->dev_stream)
+	    p->dev_stream = g4c_alloc_stream();
 	g4c_ipv4_gpu_lookup_of(_dlpmt,
 			       (uint32_t*)p->dslices(), _slice_offset,
 			       p->producer->get_slice_stride(),
@@ -261,6 +282,9 @@ BIPLookup::bpush(int i, PBatch *p)
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride();
     } else {
+	if (_on_cpu == 3)
+	    goto getout;
+	
 	if (_on_cpu < 2)
 	    for(int j=0; j<p->npkts; j++) {
 		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
@@ -275,6 +299,7 @@ BIPLookup::bpush(int i, PBatch *p)
 	    }
 	}
     }
+getout:
     output(i).bpush(p);
 }
 
@@ -284,9 +309,11 @@ BIPLookup::push(int i, Packet *p)
     if (_on_cpu < 2)
 	hvp_chatter("Should never call this: %d, %p\n", i, p);
     else {
-	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-	    g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->data(),
-							     _slice_offset)));
+	if (_on_cpu != 3) {
+	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
+		g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->data(),
+								 _slice_offset)));
+	}
 	output(i).push(p);
     }
 }

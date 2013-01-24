@@ -20,8 +20,8 @@ BatchDiscard::configure(Vector<String> &conf, ErrorHandler *errh)
 	.read("BURST", _burst)
 	.complete() < 0)
 	return -1;
-    if (!_active && input_is_push(0))
-	return errh->error("ACTIVE is meaningless in push context");
+//    if (!_active && input_is_push(0))
+//	return errh->error("ACTIVE is meaningless in push context");
     if (_burst == 0)
 	_burst = ~(unsigned) 0;
     return 0;
@@ -30,7 +30,7 @@ BatchDiscard::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 BatchDiscard::initialize(ErrorHandler *errh)
 {
-    if (input_is_pull(0)) {
+    if (input_is_pull(0) && _active) {
 	ScheduleInfo::initialize_task(this, &_task, _active, errh);
     }
     return 0;

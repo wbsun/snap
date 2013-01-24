@@ -32,6 +32,11 @@ BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
 		     cpEnd) < 0)
 	return -1;
+
+    if (_on_cpu == 3) {
+	errh->message("Skip mode.");
+	return 0;
+    }
     
     if (_on_cpu < 2)
 	if (_batcher->req_anno(0, 4, BatchProducer::anno_write)) {
@@ -39,9 +44,9 @@ BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 	    return -1;
 	}
 
-    _psr.start = EthernetBatchProducer::udp4_payload;
+    _psr.start = EthernetBatchProducer::udp4_payload; //42
     _psr.start_offset = 0; // TTL
-    _psr.len = 24;
+    _psr.len = 18;
     _psr.end = _psr.start+_psr.start_offset+_psr.len;
 
     if (_on_cpu < 2)
@@ -77,7 +82,7 @@ BIDSMatcher::generate_random_patterns(int np, int plen)
     char *ptn = p+np*sizeof(char*);
     char **pp = (char**)p;
 
-    for (int i=0; i<np; i+=32) {
+    for (int i=0; i<np; i+=8) {
 	pp[i] = ptn;
 	int j;
 	int mylen = (random()%(plen-4)) + 3;
@@ -87,7 +92,7 @@ BIDSMatcher::generate_random_patterns(int np, int plen)
 	ptn += plen;
 
 	// simulating common prefix:
-	for (int k=1; k<=31; k++) {
+	for (int k=1; k<=7; k++) {
 	    if (i+k == np)
 		return pp;
 	    
@@ -106,6 +111,9 @@ BIDSMatcher::generate_random_patterns(int np, int plen)
 int
 BIDSMatcher::initialize(ErrorHandler *errh)
 {
+    if (_on_cpu == 3)
+	return 0;
+    
     char **ptns = 0;
     int nptns = 0;
     if (_test > 2) {
@@ -138,6 +146,7 @@ BIDSMatcher::initialize(ErrorHandler *errh)
     g4c_free_stream(s);
 
     if (_on_cpu < 2) {
+	_batcher->setup_all();
 	_anno_offset = _batcher->get_anno_offset(0);
 	if (_anno_offset < 0) {
 	    errh->error("Failed to get anno offset in batch "
@@ -174,6 +183,9 @@ void
 BIDSMatcher::bpush(int i, PBatch *p)
 {
     if (!_on_cpu) {
+	if (!p->dev_stream)
+	    p->dev_stream = g4c_alloc_stream();
+	
 	g4c_gpu_acm_match(
 	    (g4c_acm_t*)_acm->devmem,
 	    p->npkts,
@@ -190,6 +202,8 @@ BIDSMatcher::bpush(int i, PBatch *p)
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride();
     } else {
+	if (_on_cpu == 3)
+	    goto getout;
 	if (_on_cpu < 2) {
 	    for(int j=0; j<p->npkts; j++) {
 		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
@@ -208,6 +222,7 @@ BIDSMatcher::bpush(int i, PBatch *p)
 	    }
 	}
     }
+getout:
     output(i).bpush(p);
 }
 
@@ -217,10 +232,12 @@ BIDSMatcher::push(int i, Packet *p)
     if (_on_cpu < 2)
 	click_chatter("Should never call this: %d, %p\n", i, p);
     else {
-	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-	    g4c_cpu_acm_match(_acm,
-			      (uint8_t*)g4c_ptr_add(p->data(), _slice_offset),
-			      p->length()-_slice_offset);
+	if (_on_cpu != 3) {
+	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
+		g4c_cpu_acm_match(_acm,
+				  (uint8_t*)g4c_ptr_add(p->data(), _slice_offset),
+				  p->length()-_slice_offset);
+	}
 	output(i).push(p);
     }
 }

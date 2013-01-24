@@ -253,6 +253,7 @@ class FromDevice : public Element { public:
     String _ifname;
 #if FROMDEVICE_ALLOW_NETMAP
     int _ringid;
+    bool _allow_nz;
 #endif
     bool _sniffer : 1;
     bool _promisc : 1;

@@ -31,6 +31,11 @@ BClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
 		     cpEnd) < 0)
 	return -1;
+
+    if (_on_cpu == 3) {
+	errh->message("Skip mode.");
+	return 0;
+    }
     
     if (_on_cpu < 2)
 	if (_batcher->req_anno(0, 4, BatchProducer::anno_write)) {
@@ -38,7 +43,7 @@ BClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 	    return -1;
 	}
 
-    _psr.start = EthernetBatchProducer::ip4_hdr;
+    _psr.start = EthernetBatchProducer::ip4_hdr; // 14
     _psr.start_offset = 8; // TTL
     _psr.len = 16;
     _psr.end = _psr.start+_psr.start_offset+_psr.len;
@@ -109,6 +114,9 @@ BClassifier::generate_random_patterns(g4c_pattern_t *ptns, int n)
 int
 BClassifier::initialize(ErrorHandler *errh)
 {
+    if (_on_cpu == 3)
+	return 0;
+    
     g4c_pattern_t *ptns = 0;
     int nptns = 0;
     if (_test > 2) {
@@ -145,6 +153,7 @@ BClassifier::initialize(ErrorHandler *errh)
     g4c_free_stream(s);
 
     if (_on_cpu < 2) {
+	_batcher->setup_all();
 	_anno_offset = _batcher->get_anno_offset(0);
 	if (_anno_offset < 0) {
 	    errh->error("Failed to get anno offset in batch "
@@ -181,6 +190,9 @@ void
 BClassifier::bpush(int i, PBatch *p)
 {
     if (!_on_cpu) {
+	if (!p->dev_stream)
+	    p->dev_stream = g4c_alloc_stream();
+	
 	g4c_gpu_classify_pkts(
 	    (g4c_classifier_t*)gcl->devmem,
 	    p->npkts,
@@ -197,6 +209,9 @@ BClassifier::bpush(int i, PBatch *p)
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride()/sizeof(int);
     } else {
+	if (_on_cpu == 3)
+	    goto getout;
+	
 	if (_on_cpu < 2)
 	    for(int j=0; j<p->npkts; j++) {
 		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
@@ -213,6 +228,7 @@ BClassifier::bpush(int i, PBatch *p)
 	    }
 	}
     }
+getout:
     output(i).bpush(p);
 }
 
@@ -223,8 +239,10 @@ BClassifier::push(int i, Packet *p)
 	hvp_chatter("Should never call this: %d, %p\n", i, p);
     }
     else {
-	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-	    g4c_cpu_classify_pkt(gcl, (uint8_t*)g4c_ptr_add(p->data(), _slice_offset));
+	if (_on_cpu != 3) {
+	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
+		g4c_cpu_classify_pkt(gcl, (uint8_t*)g4c_ptr_add(p->data(), _slice_offset));
+	}
 	output(i).push(p);
     }
 }

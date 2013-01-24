@@ -112,7 +112,7 @@ BToNMDevice::initialize(ErrorHandler *errh)
 	    _my_fd = true;
 	    if (!_full_nm) {
 		add_select(_fd, SELECT_READ); // NB NOT writable!
-		ScheduleInfo::initialize_task(this, &_task, false, errh);
+		//ScheduleInfo::initialize_task(this, &_task, false, errh);
 	    }
 	} else
 	    return -1;
@@ -136,8 +136,8 @@ BToNMDevice::initialize(ErrorHandler *errh)
 			   _ifname.c_str(), _ringid);
     used = this;
 
-    
-//    ScheduleInfo::join_scheduler(this, &_task, errh);
+    if (!_full_nm)
+	ScheduleInfo::join_scheduler(this, &_task, errh);
 //    _signal = Notifier::upstream_empty_signal(this, 0, &_task);
     return 0;
 }

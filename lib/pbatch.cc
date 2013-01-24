@@ -60,6 +60,11 @@ BatchProducer::req_slice_range(PSliceRange &psr)
 {
     if (nr_slice_ranges_req >= CLICK_PBATCH_NR_RANGES)
 	return -1;
+
+    // click_chatter("Request %p slice range %d, start %d, ofs %d, "
+		  // "len %d, end %d\n", this,
+		  // nr_slice_ranges_req,
+		  // psr.start, psr.start_offset, psr.len, psr.end);
     
     req_slice_ranges[nr_slice_ranges_req] = psr;
     return nr_slice_ranges_req++;
@@ -182,6 +187,8 @@ BatchProducer::req_priv_data(size_t len)
     nr_batch_users++;
     size_t pos = batch_priv_len;
     batch_priv_len += len;
+    click_chatter("Request %lu private data from batcher %p, total %lu\n",
+		  len, this, batch_priv_len);
 
     return pos;
 }
@@ -196,7 +203,8 @@ BatchProducer::alloc_batch_priv_data(PBatch *pb)
     if (batch_priv_len) {
 	pb->priv_data = malloc(batch_priv_len);
 	if (!pb->priv_data) {
-	    click_chatter("PBatch out of mem for private data.\n");
+	    click_chatter("PBatch out of mem for private data %lu.\n",
+		batch_priv_len);
 	    return -1;
 	}
     }
@@ -225,13 +233,13 @@ const int16_t EthernetBatchProducer::tcp6_hdr     = 54;
 const int16_t EthernetBatchProducer::udp6_payload = 62;
 const int16_t EthernetBatchProducer::tcp6_payload = 74;
 
-float EthernetBatchProducer::merge_threshold = 0.2f;
+float EthernetBatchProducer::merge_threshold = 0.6f;
 
 
-static bool
+bool
 __comp_slice_range(pair<int16_t, int16_t> a, pair<int16_t, int16_t> b)
 {
-    return a.first <= b.first;
+    return a.first < b.first;
 }
 
 void
@@ -274,11 +282,21 @@ EthernetBatchProducer::setup_slice_ranges()
     // Sort so that go from the beginning:
     pl1->sort(__comp_slice_range);
 
+    // do {
+	// list<pair<int16_t, int16_t> >::iterator lite = pl1->begin();
+	// click_chatter("sorted ranges:");
+	// while (lite != pl1->end()) {
+	    // click_chatter("(%d, %d)", lite->first, lite->second);
+	    // ++lite;
+	// }
+    // } while (0);
+
     // First merge, which merges overlapped ranges only:
     int16_t tlen = 0;
     list<pair<int16_t, int16_t> >::iterator ite = pl1->begin();
     pair<int16_t, int16_t> prev = *ite;
-    while(ite++ != pl1->end())
+    ++ite;
+    while(ite != pl1->end())
     {
 	pair<int16_t, int16_t> cur = *ite;
 
@@ -296,6 +314,7 @@ EthernetBatchProducer::setup_slice_ranges()
 	    tlen += prev.second - prev.first;
 	    prev = cur;
 	}
+	++ite;
     }
     pl2->push_back(prev);
     tlen += prev.second - prev.first;
@@ -304,6 +323,16 @@ EthernetBatchProducer::setup_slice_ranges()
     tmp = pl1;
     pl1 = pl2;
     pl2 = tmp;
+
+    // do {
+	// list<pair<int16_t, int16_t> >::iterator lite = pl1->begin();
+	// click_chatter("first merged ranges:");
+	// while (lite != pl1->end()) {
+	    // click_chatter("(%d, %d)", lite->first, lite->second);
+	    // ++lite;
+	// }
+    // } while (0);
+
 
     // Then merge non-overlapped ranges, gaps between which are
     //   larger than merge_threshold * tlen.
@@ -315,20 +344,24 @@ EthernetBatchProducer::setup_slice_ranges()
 	    
 	    ite = pl1->begin();
 	    prev = *ite;
-	    while (ite++ != pl1->end()) {
-		pair<int16_t, int16_t> cur = *ite;
+	    if (ite != pl1->end()) {
+		++ite;
+		while (ite != pl1->end()) {
+		    pair<int16_t, int16_t> cur = *ite;
 
-		if ((float)(((float)(cur.first - prev.second))/
-			    ((float)(tlen)))
-		    >= EthernetBatchProducer::merge_threshold) {
-		    tlen += cur.first-prev.second;
-
-		    prev.second = cur.second;
-		    merged = true;
-		} else {
-		    pl2->push_back(prev);
-		    prev = cur;
-		}		
+		    if ((float)(((float)(cur.first - prev.second))/
+				((float)(tlen)))
+			<= EthernetBatchProducer::merge_threshold) {
+			tlen += cur.first-prev.second;
+			
+			prev.second = cur.second;
+			merged = true;
+		    } else {
+			pl2->push_back(prev);
+			prev = cur;
+		    }
+		    ++ite;
+		}
 	    }
 	    pl2->push_back(prev);
 
@@ -349,6 +382,14 @@ EthernetBatchProducer::setup_slice_ranges()
 	slice_ranges[nr_slice_ranges].len = ite->second - ite->first;
 	slice_ranges[nr_slice_ranges].end = ite->second;
 	slice_ranges[nr_slice_ranges].slice_offset = offset;
+
+	// click_chatter("Final slice of %p: %d, start %d, ofs %d, len %d "
+		      // "end %d, slice_ofs %d\n", this, nr_slice_ranges,
+		      // slice_ranges[nr_slice_ranges].start,
+		      // slice_ranges[nr_slice_ranges].start_offset,
+		      // slice_ranges[nr_slice_ranges].len,
+		      // slice_ranges[nr_slice_ranges].end,
+		      // slice_ranges[nr_slice_ranges].slice_offset);
 
 	nr_slice_ranges++;
 	offset += ite->second - ite->first;
