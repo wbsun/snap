@@ -182,7 +182,7 @@ BIDSMatcher::initialize(ErrorHandler *errh)
 void
 BIDSMatcher::bpush(int i, PBatch *p)
 {
-    if (!_on_cpu) {
+    if (_on_cpu <= 0) {
 	if (!p->dev_stream)
 	    p->dev_stream = g4c_alloc_stream();
 	
@@ -229,17 +229,13 @@ getout:
 void
 BIDSMatcher::push(int i, Packet *p)
 {
-    if (_on_cpu < 2)
-	click_chatter("Should never call this: %d, %p\n", i, p);
-    else {
-	if (_on_cpu != 3) {
-	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-		g4c_cpu_acm_match(_acm,
-				  (uint8_t*)g4c_ptr_add(p->data(), _slice_offset),
-				  p->length()-_slice_offset);
-	}
-	output(i).push(p);
+    if (_on_cpu != 3) {
+	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
+	    g4c_cpu_acm_match(_acm,
+			      (uint8_t*)g4c_ptr_add(p->data(), _slice_offset),
+			      p->length()-_slice_offset);
     }
+    output(i).push(p);
 }
 
 CLICK_ENDDECLS

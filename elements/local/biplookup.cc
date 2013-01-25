@@ -270,7 +270,7 @@ BIPLookup::initialize(ErrorHandler *errh)
 void
 BIPLookup::bpush(int i, PBatch *p)
 {
-    if (!_on_cpu) {
+    if (_on_cpu <= 0) {
 	if (!p->dev_stream)
 	    p->dev_stream = g4c_alloc_stream();
 	g4c_ipv4_gpu_lookup_of(_dlpmt,
@@ -306,16 +306,13 @@ getout:
 void
 BIPLookup::push(int i, Packet *p)
 {
-    if (_on_cpu < 2)
-	hvp_chatter("Should never call this: %d, %p\n", i, p);
-    else {
-	if (_on_cpu != 3) {
-	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-		g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->data(),
-								 _slice_offset)));
-	}
-	output(i).push(p);
+    if (_on_cpu != 3) {
+	*(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
+	    g4c_ipv4_lookup(_hlpmt, *(uint32_t*)(g4c_ptr_add(p->data(),
+							     _slice_offset)));
     }
+    output(i).push(p);
+  
 }
 
 CLICK_ENDDECLS
