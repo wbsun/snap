@@ -27,6 +27,8 @@ public:
 private:
     PBatch *_batch;
     int _idx;
+    int _color;
+    int _anno;
 };
 
 CLICK_ENDDECLS

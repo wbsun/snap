@@ -201,10 +201,11 @@ CheckIPHeader::simple_action(Packet *p)
    * Configuration string should have listed all subnet
    * broadcast addresses known to this router.
    */
+  if (0) {
   if (find(_bad_src.begin(), _bad_src.end(), IPAddress(ip->ip_src)) < _bad_src.end()
       && find(_good_dst.begin(), _good_dst.end(), IPAddress(ip->ip_dst)) == _good_dst.end())
     return drop(BAD_SADDR, p);
-
+  }
   /*
    * RFC1812 4.2.3.1: discard illegal destinations.
    * We now do this in the IP routing table.

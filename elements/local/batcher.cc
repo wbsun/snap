@@ -169,7 +169,7 @@ Batcher::init_batch_after_create(PBatch *pb)
 int
 Batcher::finit_batch_for_recycle(PBatch *pb)
 {
-    pb->shared = 0;
+    pb->shared = 1;
 
     if (pb->dev_stream) {
 	g4c_free_stream(pb->dev_stream);
@@ -177,7 +177,8 @@ Batcher::finit_batch_for_recycle(PBatch *pb)
     }
 
     for (int i=0; i<pb->npkts; i++)
-	pb->pptrs[i]->kill();
+	if (pb->pptrs[i])
+	    pb->pptrs[i]->kill();
     pb->npkts = 0;
 
     pb->hwork_ptr = pb->host_mem;
@@ -344,7 +345,8 @@ Batcher::kill_batch(PBatch *pb)
 	}
 
 	return 0;
-    }
+    } else if (pb->shared > 0xffff)
+	pb->shared = 1;
 
     if (_test)
 	hvp_chatter("batch %p shared %u, not killed\n",

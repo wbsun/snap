@@ -474,6 +474,8 @@ FromDevice::emit_packet(WritablePacket *p, int extra_len, const Timestamp &ts)
     else
 	checked_output_push(1, p);
 #endif
+    p->set_mac_header(p->data());
+    SET_EXTRA_LENGTH_ANNO(p, extra_len);
     output(0).push(p);
 }
 #endif

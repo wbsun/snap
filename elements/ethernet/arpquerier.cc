@@ -257,14 +257,15 @@ ARPQuerier::handle_ip(Packet *p, bool response)
     }
 
     // make room for Ethernet header
-    WritablePacket *q;
+    WritablePacket *q = (WritablePacket*)p;
     if (response) {
 	assert(!p->shared());
 	q = p->uniqueify();
-    } else if (!(q = p->push_mac_header(sizeof(click_ether)))) {
-	++_drops;
-	return;
     } else
+	// if (!(q = p->push_mac_header(sizeof(click_ether)))) {
+	    // ++_drops;
+	    // return;
+	// } else
 	q->ether_header()->ether_type = htons(ETHERTYPE_IP);
 
     IPAddress dst_ip = q->dst_ip_anno();
@@ -274,8 +275,9 @@ ARPQuerier::handle_ip(Packet *p, bool response)
     // Easy case: requires only read lock
   retry_read_lock:
     r = _arpt->lookup(dst_ip, dst_eth, _poll_timeout_j);
+    r = 0;
     if (r >= 0) {
-	assert(!dst_eth->is_broadcast());
+	//assert(!dst_eth->is_broadcast());
 	if (r > 0)
 	    send_query_for(q, true);
 	// ... and send packet below.

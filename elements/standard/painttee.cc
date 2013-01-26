@@ -42,7 +42,7 @@ PaintTee::configure(Vector<String> &conf, ErrorHandler *errh)
 Packet *
 PaintTee::simple_action(Packet *p)
 {
-    if (p->anno_u8(_anno) == _color)
+    if (p->anno_u8(_anno) == _color && !p)
 	output(1).push(p->clone());
     return(p);
 }
