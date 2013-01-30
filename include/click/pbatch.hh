@@ -274,6 +274,8 @@ public:
     volatile uint32_t shared;
 
     void *priv_data;
+    bool tsed;
+    timespec ts;
 
 public:
     PBatch(BatchProducer *prod);

@@ -430,6 +430,7 @@ PBatch::~PBatch()
 int
 PBatch::init()
 {
+    tsed = false;
     npkts = 0;
     host_mem = 0;
     dev_mem = 0;

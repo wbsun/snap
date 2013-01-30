@@ -18,7 +18,7 @@ public:
     ~BIDSMatcher();
     
     const char *class_name() const	{ return "BIDSMatcher"; }
-    const char *port_count() const	{ return "1-/="; }
+    const char *port_count() const	{ return "-/-"; }
     const char *processing() const  { return PUSH; }
 
     void push(int i, Packet *p);
@@ -36,6 +36,7 @@ private:
     int16_t _anno_offset;
     int16_t _slice_offset;
     int _on_cpu;
+    int _div;
 };
 
 CLICK_ENDDECLS

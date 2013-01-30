@@ -335,8 +335,8 @@ ToDevice::netmap_send_packet(Packet *p)
 	    NetmapInfo::buffer_destructor(buf, 0);
 	    p->reset_buffer();
 	} else
-	    memcpy(buf, p->data(), p_length);
-	ring->slot[cur].len = p_length;
+	    memcpy(buf, p->data(), 64);//p_length);
+	ring->slot[cur].len = 64; //p_length;
 	__asm__ volatile("" : : : "memory");
 	ring->cur = NETMAP_RING_NEXT(ring, cur);
 	ring->avail--;

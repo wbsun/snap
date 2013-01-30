@@ -76,6 +76,9 @@ BQueue::bpush(int i, PBatch *pb)
       _que.add_new(pb);
       return;
       } */
+
+    if (ninputs() > 1 && atomic_uint32_t::compare_and_swap(pb->shared, 2, 1) != 1)
+	return;
     
     if (unlikely(_que.full())) {
 	_drops += pb->npkts;

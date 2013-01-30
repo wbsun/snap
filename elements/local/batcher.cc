@@ -8,6 +8,7 @@
 #include <click/pbatch.hh>
 #include <click/timestamp.hh>
 #include <click/master.hh>
+#include <time.h>
 CLICK_DECLS
 
 // Bigger enough to hold batches.
@@ -338,6 +339,20 @@ Batcher::kill_batch(PBatch *pb)
 {
     if (atomic_uint32_t::dec_and_test(pb->shared))
     {
+	/*
+	if (pb->tsed) {
+	    struct timespec ts;
+	    clock_gettime(
+		CLOCK_REALTIME,
+		&ts);
+	    ts.tv_sec -= pb->ts.tv_sec;
+	    ts.tv_nsec -= pb->ts.tv_nsec;
+	    if (ts.tv_sec > 0)
+		ts.tv_nsec += 1000000000;
+	    click_chatter("real kill batch %p sec %ld nsec %ld\n",
+			pb, ts.tv_sec, ts.tv_nsec);
+	}
+	*/
 	this->finit_batch_for_recycle(pb);
 	if (this->recycle_batch(pb) == false) {
 	    this->destroy_batch(pb);
@@ -345,8 +360,10 @@ Batcher::kill_batch(PBatch *pb)
 	}
 
 	return 0;
-    } else if (pb->shared > 0xffff)
-	pb->shared = 1;
+    } else {
+	if (pb->shared > 0xffff)
+	    pb->shared = 1;	
+    }
 
     if (_test)
 	hvp_chatter("batch %p shared %u, not killed\n",
@@ -420,24 +437,29 @@ Batcher::push(int i, Packet *p)
     if (!_batch) {
 	_batch = alloc_batch();
 	if (unlikely(!_batch)) {
-	    if (_test)
-		hvp_chatter("no batch available\n");
+//	    if (_test)
+	    hvp_chatter("no batch available\n");
 	    p->kill();
 	    return;
-	}	    
+	}
     }
 
     add_packet(p);
-    //_count++;
+    _count++;
+    // if (((_count & 0x3ffff) == 0) && (_batch->tsed == false)) {
+	// _batch->tsed = true;
+	// clock_gettime(CLOCK_REALTIME, &_batch->ts);
+    // }
 	
     if (_batch->npkts >= this->batch_size) {
 	output(0).bpush(_batch);
-	_batch = alloc_batch();
 	
 	if (unlikely(_test)) {
 	    hvp_chatter("batch %p full at %s\n", _batch,
 			Timestamp::now().unparse().c_str());
 	}
+	_batch = alloc_batch();	
+	
 	if (unlikely(_timer.scheduled()))
 	    _timer.clear();	
     }

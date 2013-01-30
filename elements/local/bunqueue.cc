@@ -135,8 +135,9 @@ BUnqueue::bpull(int port)
 	}
 */
 	
-	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream)) {
+	if (pb->dev_stream == 0 || g4c_stream_done(pb->dev_stream) || _checks > 3) {
 	    _que.remove_oldest_with_wmb();
+	    _checks = 0;
 
 // 	    click_compiler_fence();
 	    // _q_cons_lock = 0;
@@ -150,6 +151,7 @@ BUnqueue::bpull(int port)
 // 	    click_compiler_fence();
 	    // _q_cons_lock = 0;
 	    //pb->kill();
+	    _checks++;
 	    return 0;
 	}
     }

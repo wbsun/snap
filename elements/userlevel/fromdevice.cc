@@ -43,6 +43,7 @@
 #include <click/userutils.hh>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 #include "fakepcap.hh"
 
 #if FROMDEVICE_ALLOW_LINUX
@@ -522,6 +523,7 @@ FromDevice::netmap_dispatch()
 	}
 
 	int nzcopy = (int) (ring->num_slots / 2) - (int) ring->reserved;
+	int oav = ring->avail;
 
 	while (n != _burst && ring->avail > 0) {
 	    unsigned cur = ring->cur;
@@ -543,9 +545,16 @@ FromDevice::netmap_dispatch()
 	    ring->cur = NETMAP_RING_NEXT(ring, ring->cur);
 	    --ring->avail;
 	    ++n;
-
-	    if (p)
+	    
+	    if (p) {
+/*		if (((n+_count)&0x3ffff)==0) {
+		    (*((uint32_t*)(p->anno())+2)) = 0x10101010;
+		    (*((int32_t*)(p->anno())+3)) = oav;
+		    clock_gettime(CLOCK_REALTIME,
+				  (struct timespec*)(((uint8_t*)p->anno())+16));
+				  }*/
 		emit_packet(p, 0, ring->ts);
+	    }
 	    
 	}
 	if (!_allow_nz)

@@ -6,6 +6,7 @@
 #include <click/args.hh>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <click/atomic.hh>
 #include "bclassifier.hh"
 
 CLICK_DECLS
@@ -25,9 +26,11 @@ BClassifier::~BClassifier()
 int
 BClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+    _div = false;
     if (cp_va_kparse(conf, this, errh,
 		     "BATCHER", cpkN, cpElementCast, "Batcher", &_batcher,
-		     "TEST", cpkN, cpInteger, &_test,		     
+		     "TEST", cpkN, cpInteger, &_test,
+		     "DIV", cpkN, cpBool, &_div,		     
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
 		     cpEnd) < 0)
 	return -1;
@@ -229,7 +232,13 @@ BClassifier::bpush(int i, PBatch *p)
 	}
     }
 getout:
-    output(i).bpush(p);
+    if (!_div)
+	output(i).bpush(p);
+    else {
+	atomic_uint32_t::inc(p->shared);
+	output(i*2).bpush(p);
+	output(i*2+1).bpush(p);
+    }	
 }
 
 void

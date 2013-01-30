@@ -93,6 +93,7 @@ private:
     // Reset args after allocting a batch from pool.
     inline int init_batch_after_recycle(PBatch* pb) {
 	pb->shared = 1;
+	pb->tsed = false;
 	return 0;
     }
 

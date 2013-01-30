@@ -35,10 +35,8 @@ H2D::bpush(int i, PBatch *pb)
     if (pb->dev_stream == 0) {
 	pb->dev_stream = g4c_alloc_stream();
 	if (pb->dev_stream == 0) {
-	    if (_test) {
-		hvp_chatter(
-		    "Drop pbatch %p because of stream shortage\n", pb);
-	    }
+	    hvp_chatter(
+		"Drop pbatch %p because of stream shortage\n", pb);
 	    drop_batch(pb);
 	    return;
 	}

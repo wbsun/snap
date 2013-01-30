@@ -25,9 +25,11 @@ BIDSMatcher::~BIDSMatcher()
 int
 BIDSMatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+    _div = 0;
     if (cp_va_kparse(conf, this, errh,
 		     "BATCHER", cpkN, cpElementCast, "Batcher", &_batcher,
 		     "TEST", cpkN, cpInteger, &_test,
+		     "DIV", cpkN, cpInteger, &_div,
 		     "PTNLEN", cpkN, cpInteger, &_rand_pattern_max_len,
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
 		     cpEnd) < 0)
@@ -185,19 +187,48 @@ BIDSMatcher::bpush(int i, PBatch *p)
     if (_on_cpu <= 0) {
 	if (!p->dev_stream)
 	    p->dev_stream = g4c_alloc_stream();
-	
-	g4c_gpu_acm_match(
-	    (g4c_acm_t*)_acm->devmem,
-	    p->npkts,
-	    p->dslices(),
-	    p->producer->get_slice_stride(),
-	    _slice_offset,
-	    0,
-	    (int*)p->dannos(),
-	    p->producer->get_anno_stride()/sizeof(int),
-	    _anno_offset/sizeof(int),
-	    p->dev_stream, 0);
-		
+
+	//if (input(i).element()->noutputs() == input(i).element()->ninputs())
+	if (!_div) {
+	    g4c_gpu_acm_match(
+		(g4c_acm_t*)_acm->devmem,
+		p->npkts,
+		p->dslices(),
+		p->producer->get_slice_stride(),
+		_slice_offset,
+		0,
+		(int*)p->dannos(),
+		p->producer->get_anno_stride()/sizeof(int),
+		_anno_offset/sizeof(int),
+		p->dev_stream, 0);
+	}
+	else if (_div==1) {
+	    g4c_gpu_acm_match(
+		(g4c_acm_t*)_acm->devmem,
+		p->npkts,
+		p->dslices(),
+		p->producer->get_slice_stride(),
+		_slice_offset,
+		0,
+		(int*)p->dannos(),
+		p->producer->get_anno_stride()/sizeof(int),
+		_anno_offset/sizeof(int),
+		p->dev_stream, 3);
+	}
+	else {
+	    g4c_gpu_acm_match(
+		(g4c_acm_t*)_acm->devmem,
+		p->npkts,
+		p->dslices(),
+		p->producer->get_slice_stride(),
+		_slice_offset,
+		0,
+		(int*)p->dannos(),
+		p->producer->get_anno_stride()/sizeof(int),
+		_anno_offset/sizeof(int),
+		p->dev_stream, 4);
+	}
+	    
 	p->hwork_ptr = p->hannos();
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride();

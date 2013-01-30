@@ -56,6 +56,18 @@ void
 Discard::push(int, Packet *p)
 {
     _count++;
+/*    if ((*((uint32_t*)(p->anno())+2)) == 0x10101010) {
+	(*((uint32_t*)(p->anno())+2)) = 0;
+	struct timespec ts, *ots;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ots = (struct timespec*)(((uint8_t*)p->anno())+16);
+	ts.tv_sec -= ots->tv_sec;
+	ts.tv_nsec -= ots->tv_nsec;
+	if (ts.tv_sec > 0)
+	    ts.tv_nsec += 1000000000;
+	click_chatter("packet %p sec %ld nsec %ld\n",
+		      p, ts.tv_sec*(*((int32_t*)(p->anno())+3)), ts.tv_nsec*(*((int32_t*)(p->anno())+3)));	
+		      }*/
     p->kill();
 }
 
