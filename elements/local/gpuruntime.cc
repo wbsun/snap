@@ -131,6 +131,66 @@ GPURuntime::cleanup(CleanupStage stage)
     }
 }
 
+void *
+GPURuntime::malloc_host(size_t sz, bool wc)
+{
+    if (wc)
+	return g4c_alloc_page_lock_mem(sz);
+    else
+	return g4c_alloc_wc_mem(sz);    
+}
+
+void
+GPURuntime::free_host(void *p)
+{
+    g4c_free_host_mem(p);
+}
+
+void *
+GPURuntime::malloc_dev(size_t sz)
+{
+    return g4c_alloc_dev_mem(sz);    
+}
+
+void
+GPURuntime::free_dev(void *p)
+{
+    g4c_free_dev_mem(p);
+}
+
+int
+GPURuntime::alloc_stream()
+{
+    return g4c_alloc_stream();
+}
+
+void
+GPURuntime::release_stream(int s)
+{
+    g4c_free_stream(s);
+}
+
+int
+GPURuntime::check_stream_done(int s, bool blocking)
+{
+    if (blocking)
+	return g4c_stream_sync(s);
+    else
+	return g4c_stream_done(s);
+}
+
+int
+GPURuntime::memcpy_h2d(void *h, void *d, size_t sz, int s)
+{
+    return g4c_h2d_async(h, d, sz, s);
+}
+
+int
+GPURuntime::memcpy_d2h(void *d, void *h, size_t sz, int s)
+{
+    return g4c_d2h_async(d, h, sz, s);
+}
+
 CLICK_ENDDECLS
 EXPORT_ELEMENT(GPURuntime)
 ELEMENT_LIBS(-lg4c)
