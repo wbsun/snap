@@ -3,6 +3,7 @@
 #include <click/confparse.hh>
 #include <click/error.hh>
 #include <click/hvputils.hh>
+#include "gpuruntime.hh"
 CLICK_DECLS
 
 H2D::H2D()
@@ -73,5 +74,6 @@ H2D::initialize(ErrorHandler *errh)
 }
 
 CLICK_ENDDECLS
+ELEMENT_REQUIRES(BElement GPURuntime)
 EXPORT_ELEMENT(H2D)
 ELEMENT_LIBS(-lg4c)

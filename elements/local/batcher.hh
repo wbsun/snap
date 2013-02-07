@@ -9,6 +9,7 @@
 #include <click/timer.hh>
 #include <click/sync.hh>
 #include <click/ring.hh>
+#include "belement.hh"
 using namespace std;
 CLICK_DECLS
 
@@ -27,7 +28,7 @@ CLICK_DECLS
  *   MT_PUSHERS: bool value.
  *   
  */
-class Batcher : public Element, public EthernetBatchProducer {
+class Batcher : public BElement, public EthernetBatchProducer {
 public:
     Batcher();
     ~Batcher();

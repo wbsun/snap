@@ -158,5 +158,6 @@ BUnqueue::bpull(int port)
 }
 
 CLICK_ENDDECLS
+ELEMENT_REQUIRES(BElement)
 EXPORT_ELEMENT(BUnqueue)
 ELEMENT_LIBS(-lg4c)

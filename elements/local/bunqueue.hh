@@ -7,10 +7,11 @@
 #include <click/error.hh>
 #include <click/ring.hh>
 #include <click/pbatch.hh>
+#include "belement.hh"
 
 CLICK_DECLS
 
-class BUnqueue : public Element {
+class BUnqueue : public BElement {
 public:
     BUnqueue();
     ~BUnqueue();

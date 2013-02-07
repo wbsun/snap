@@ -116,5 +116,6 @@ BQueue::bpush(int i, PBatch *pb)
 }
 
 CLICK_ENDDECLS
+ELEMENT_REQUIRES(BElement)
 EXPORT_ELEMENT(BQueue)
 ELEMENT_LIBS(-lg4c)

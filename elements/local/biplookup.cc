@@ -316,6 +316,6 @@ BIPLookup::push(int i, Packet *p)
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(IPRouteTable Batcher)
+ELEMENT_REQUIRES(IPRouteTable Batcher BElement)
 EXPORT_ELEMENT(BIPLookup)
 ELEMENT_LIBS(-lg4c)

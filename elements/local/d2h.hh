@@ -4,10 +4,11 @@
 #include <click/glue.hh>
 #include <click/pbatch.hh>
 #include <g4c.h>
+#include "belement.hh"
 
 CLICK_DECLS
 
-class D2H : public Element {
+class D2H : public BElement {
 public:
     D2H();
     ~D2H();

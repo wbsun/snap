@@ -9,6 +9,7 @@
 #include <click/timestamp.hh>
 #include <click/master.hh>
 #include <time.h>
+#include "gpuruntime.hh"
 CLICK_DECLS
 
 // Bigger enough to hold batches.
@@ -557,6 +558,7 @@ Batcher::run_timer(Timer *timer)
 }
 
 CLICK_ENDDECLS
+ELEMENT_REQUIRES(BElement GPURuntime)
 EXPORT_ELEMENT(Batcher)
 ELEMENT_LIBS(-lg4c)
 

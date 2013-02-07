@@ -3,9 +3,10 @@
 #include <click/element.hh>
 #include <click/task.hh>
 #include <click/pbatch.hh>
+#include "belement.hh"
 CLICK_DECLS
 
-class BatchDiscard : public Element { public:
+class BatchDiscard : public BElement { public:
 
     BatchDiscard();
 

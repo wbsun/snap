@@ -2,6 +2,7 @@
 #include "d2h.hh"
 #include <click/error.hh>
 #include <click/hvputils.hh>
+#include "gpuruntime.hh"
 CLICK_DECLS
 
 D2H::D2H()
@@ -56,5 +57,6 @@ D2H::initialize(ErrorHandler *errh)
 }
 
 CLICK_ENDDECLS
+ELEMENT_REQUIRES(BElement GPURuntime)
 EXPORT_ELEMENT(D2H)
 ELEMENT_LIBS(-lg4c)
