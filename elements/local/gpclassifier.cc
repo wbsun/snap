@@ -7,11 +7,11 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <click/atomic.hh>
-#include "bclassifierengine.hh"
+#include "gpclassifier.hh"
 
 CLICK_DECLS
 
-BClassifierEngine::BClassifierEngine() : _test(0),
+GPClassifier::GPClassifier() : _test(0),
 			     _batcher(0)
 {
     _anno_offset = -1;
@@ -19,12 +19,12 @@ BClassifierEngine::BClassifierEngine() : _test(0),
     _on_cpu = 0;
 }
 
-BClassifierEngine::~BClassifierEngine()
+GPClassifier::~GPClassifier()
 {
 }
 
 int
-BClassifierEngine::configure(Vector<String> &conf, ErrorHandler *errh)
+GPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     _div = false;
     if (cp_va_kparse(conf, this, errh,
@@ -68,7 +68,7 @@ BClassifierEngine::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 void
-BClassifierEngine::generate_random_patterns(g4c_pattern_t *ptns, int n)
+GPClassifier::generate_random_patterns(g4c_pattern_t *ptns, int n)
 {
     struct timeval tv;
     gettimeofday(&tv, 0);
@@ -115,7 +115,7 @@ BClassifierEngine::generate_random_patterns(g4c_pattern_t *ptns, int n)
 }
 
 int
-BClassifierEngine::initialize(ErrorHandler *errh)
+GPClassifier::initialize(ErrorHandler *errh)
 {
     if (_on_cpu == 3)
 	return 0;
@@ -166,7 +166,7 @@ BClassifierEngine::initialize(ErrorHandler *errh)
 			_batcher->w_anno_start, _batcher->w_anno_len);
 	    return -1;
 	} else
-	    errh->message("BClassifierEngine anno offset %d", _anno_offset);
+	    errh->message("GPClassifier anno offset %d", _anno_offset);
 
 	_slice_offset = _batcher->get_slice_offset(_psr);
 	if (_slice_offset < 0) {
@@ -180,7 +180,7 @@ BClassifierEngine::initialize(ErrorHandler *errh)
 	    }
 	    return -1;
 	} else
-	    errh->message("BClassifierEngine slice offset %d", _slice_offset);
+	    errh->message("GPClassifier slice offset %d", _slice_offset);
     } else {
 	_anno_offset = 0;
 	_slice_offset = 22; // IP dst
@@ -190,7 +190,7 @@ BClassifierEngine::initialize(ErrorHandler *errh)
 }
 
 void
-BClassifierEngine::bpush(int i, PBatch *p)
+GPClassifier::bpush(int i, PBatch *p)
 {
     if (!_on_cpu) {
 	if (!p->dev_stream)
@@ -242,7 +242,7 @@ getout:
 }
 
 void
-BClassifierEngine::push(int i, Packet *p)
+GPClassifier::push(int i, Packet *p)
 {
     if (_on_cpu < 2) {
 	hvp_chatter("Should never call this: %d, %p\n", i, p);
@@ -258,5 +258,5 @@ BClassifierEngine::push(int i, Packet *p)
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(BElement)
-EXPORT_ELEMENT(BClassifierEngine)
+EXPORT_ELEMENT(GPClassifier)
 ELEMENT_LIBS(-lg4c)    

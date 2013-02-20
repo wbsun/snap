@@ -12,27 +12,25 @@ using namespace std;
 
 CLICK_DECLS
 
-class BClassifierEngine : public BElement {
+class GPClassifier : public BElement {
 public:
-    BClassifierEngine();
-    ~BClassifierEngine();
+    GPClassifier();
+    ~GPClassifier();
     
-    const char *class_name() const	{ return "BClassifierEngine"; }
+    const char *class_name() const	{ return "GPClassifier"; }
     int configure_phase() const	{ return CONFIGURE_PHASE_INFO; }
 
-    void push(int i, Packet *p);
-    void bpush(int i, PBatch *p);
     int configure(Vector<String> &conf, ErrorHandler *errh);
     int initialize(ErrorHandler *errh);
 
+    int classify_batch(PBatch *pb);
+
 private:
+    int parse_rules(Vector<String> &conf, g4c_pattern_t *ptns, int n, ErrorHandler *errh);
     void generate_random_patterns(g4c_pattern_t *ptns, int n);
     Batcher* _batcher;
     g4c_classifier_t *gcl;
     int _test;
-    PSliceRange _psr;
-    int16_t _anno_offset;
-    int16_t _slice_offset;
     int _on_cpu;
     bool _div;
 };
