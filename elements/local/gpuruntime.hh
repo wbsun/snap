@@ -14,6 +14,7 @@ public:
     int configure(Vector<String>&, ErrorHandler*);
     void cleanup(CleanupStage stage);
 
+    // GPU computing APIs
     void *malloc_host(size_t sz, bool wc=false);
     void free_host(void *p);
     void *malloc_dev(size_t sz);

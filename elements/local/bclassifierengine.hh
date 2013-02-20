@@ -18,8 +18,7 @@ public:
     ~BClassifierEngine();
     
     const char *class_name() const	{ return "BClassifierEngine"; }
-    const char *port_count() const	{ return "1-/1-"; }
-    const char *processing() const  { return PUSH; }
+    int configure_phase() const	{ return CONFIGURE_PHASE_INFO; }
 
     void push(int i, Packet *p);
     void bpush(int i, PBatch *p);
