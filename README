@@ -1,14 +1,13 @@
 
-  (Previous HVP System)
+  Snap: When Click Uses GPU
 
-  Now part of Glick (GPU+Click) system. For old README from Click, read
-  README.old
-
-  Still under development.
-
-  Stability:
-    I can't guarrantee sucessful compilation and execution of commits
-    from my laptop, but commits from my GPU node are runnable for
-    most of time.
-
+  A heterogeneous parallel packet processing engine with GPU computing. Aiming
+    at 10Gbps line rate complex packet processing. Now can reach ~30Gbps SDN
+    forwarding, IDS router at 64B packets and 40Gbps starting from 128B on an
+    overclocked Core i7 930 machine with GTX 480 or Tesla C2075.
+  
+  Snap is still under development, master branch doesn't contain the latest
+    unstable change, checkout other topic branches such as "mrg" for new
+    functionality and elements.
+  
   wbsun@cs.utah.edu
