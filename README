@@ -1,5 +1,5 @@
 
-  Snap: When Click Uses GPU
+  Snap: When Click Meets GPU
 
   A heterogeneous parallel packet processing engine with GPU computing. Aiming
     at 10Gbps line rate complex packet processing. Now can reach ~30Gbps SDN
