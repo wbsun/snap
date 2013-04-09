@@ -16,6 +16,13 @@ public:
 
     virtual PBatch* bpull(int port);
     virtual void bpush(int i, PBatch *p);
+
+    // modes of BElements, mostly for testing.
+    enum {
+	ON_NORMAL = 0,
+	CPU_BATCH = 1,
+	CPU_NOBATCH = 2,
+	ONNONE = 3 };
 };
 
 CLICK_ENDDECLS

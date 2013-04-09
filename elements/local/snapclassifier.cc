@@ -7,62 +7,99 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <click/atomic.hh>
+#include <fstream>
+using namespace std;
 #include "snapclassifier.hh"
 
 CLICK_DECLS
 
-SnapClassifier::SnapClassifier() : _test(0),
-			     _batcher(0)
+SnapClassifier::SnapClassifier()
 {
-    _anno_offset = -1;
-    _slice_offset = -1;
-    _on_cpu = 0;
+    _debug = false;
+    gcl = 0;
 }
 
 SnapClassifier::~SnapClassifier()
 {
 }
 
+static bool
+read_pattern_file(String &filename, Vector<String> &sptns, ErrorHandler *errh)
+{
+    ifstream ifs (filename.c_str());
+    if (ifs.fail()) {
+	errh->error("Failed to open %s", filename.c_str());
+	return false;
+    }
+
+    sptns.reserve(ifs.rdbuf()->in_avail()/80); // simple restimation of # lines
+
+    char pattern[256]; // yes, yes, I know, I know..
+    do {
+	ifs.getline(pattern, 256);
+	sptns.push_back(String(pattern));
+    } while (!ifs.eof());
+
+    ifs.close();
+    return true;
+}
+
+static void
+dump_patterns(g4c_pattern_t *ptns, int n)
+{
+    for (int i=0; i<n; i++) {
+	click_chatter("0X%08X, %d, 0X%08X, %d, %d, %d, 0X%04X ");
+    }
+}
+
 int
 SnapClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    _div = false;
+    String filename;
+    bool fromfile;
+    int nr_patterns = 1000;
+    
     if (cp_va_kparse(conf, this, errh,
-		     "BATCHER", cpkN, cpElementCast, "Batcher", &_batcher,
-		     "TEST", cpkN, cpInteger, &_test,
-		     "DIV", cpkN, cpBool, &_div,		     
-		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
+		     "PATTERN_FILE", cpkC, &fromfile, cpFilename, &filename,
+		     "NR_PATTERNS", cpkN, cpInteger, &nr_patterns,
+		     "DEBUG", cpkN, cpBool, &_debug,
 		     cpEnd) < 0)
 	return -1;
 
-    if (_on_cpu == 3) {
-	errh->message("Skip mode.");
-	return 0;
-    }
-    
-    if (_on_cpu < 2)
-	if (_batcher->req_anno(0, 4, BatchProducer::anno_write)) {
-	    errh->error("Register annotation request in batcher failed");
+    g4c_pattern_t *ptns = 0;    
+    if (fromfile) {
+	Vector<String> sptns;
+	if (!read_pattern_file(filename, sptns, errh))
+	    return -1;
+
+	if (_debug)
+	    nr_patterns = sptns.size();
+	
+	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*sptns.size());
+	if (!ptns) {
+	    errh->error("failed to alloc mem for patterns");
 	    return -1;
 	}
-
-    _psr.start = EthernetBatchProducer::ip4_hdr; // 14
-    _psr.start_offset = 8; // TTL
-    _psr.len = 16;
-    _psr.end = _psr.start+_psr.start_offset+_psr.len;
-
-    if (_on_cpu < 2)
-	if (_batcher->req_slice_range(_psr) < 0) {
-	    errh->error("Request slice range failed: %d, %d, %d, %d",
-			_psr.start, _psr.start_offset, _psr.len, _psr.end);
+	memset(ptns, 0, sizeof(g4c_pattern_t)*sptns.size());
+	if (!parse_patterns(sptns, errh, ptns, sptns.size())) {
+	    errh->error("failed to parse patterns");
 	    return -1;
 	}
-
-    if (_test < 2) {
-	errh->error("For now, we need random generated patterns, use a TEST"
-		    " larger than 2 to assign #ptns");
-	return -1;
+    } else {
+	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*nr_patterns);
+	if (!ptns) {
+	    errh->error("failed to alloc mem for patterns");
+	    return -1;
+	}
+	
+	memset(ptns, 0, sizeof(g4c_pattern_t)*nr_patterns);
+	generate_random_patterns(ptns, nr_patterns);
     }
+
+    if (_debug)
+	dump_patterns(ptns, nr_patterns);
+
+    free(ptns);
 
     return 0;
 }
@@ -142,7 +179,8 @@ SnapClassifier::parse_patterns(Vector<String> &conf, ErrorHandler *errh,
 	    ptns[i].proto = -1;
 	else
 	    ptns[i].proto = ptv;
-    }	
+    }
+    return true;
 }
 
 void
@@ -195,6 +233,7 @@ SnapClassifier::generate_random_patterns(g4c_pattern_t *ptns, int n)
 int
 SnapClassifier::initialize(ErrorHandler *errh)
 {
+    /*
     if (_on_cpu == 3)
 	return 0;
     
@@ -209,7 +248,7 @@ SnapClassifier::initialize(ErrorHandler *errh)
 	memset(ptns, 0, sizeof(g4c_pattern_t)*_test);
 	generate_random_patterns(ptns, _test);
 	nptns = _test;
-    }
+    } 
     
     int s = g4c_alloc_stream();
     if (!s) {
@@ -263,78 +302,12 @@ SnapClassifier::initialize(ErrorHandler *errh)
 	_anno_offset = 0;
 	_slice_offset = 22; // IP dst
     }
+    */
 	
     return 0;
 }
 
-void
-SnapClassifier::bpush(int i, PBatch *p)
-{
-    if (!_on_cpu) {
-	if (!p->dev_stream)
-	    p->dev_stream = g4c_alloc_stream();
-	
-	g4c_gpu_classify_pkts(
-	    (g4c_classifier_t*)gcl->devmem,
-	    p->npkts,
-	    p->dslices(),
-	    p->producer->get_slice_stride(),
-	    _slice_offset,
-	    _slice_offset+12,
-	    (int*)p->dannos(),
-	    p->producer->get_anno_stride()/sizeof(int),
-	    _anno_offset/sizeof(int),
-	    p->dev_stream);
-		
-	p->hwork_ptr = p->hannos();
-	p->dwork_ptr = p->dannos();
-	p->work_size = p->npkts * p->producer->get_anno_stride()/sizeof(int);
-    } else {
-	if (_on_cpu == 3)
-	    goto getout;
-	
-	if (_on_cpu < 2)
-	    for(int j=0; j<p->npkts; j++) {
-		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
-		    g4c_cpu_classify_pkt(
-			gcl,
-			(uint8_t*)g4c_ptr_add(p->slice_hptr(j),
-					      _slice_offset));
-	    }
-	else {
-	    for (int j=0; j<p->npkts; j++) {
-		Packet *pkt = p->pptrs[j];
-		*(int*)(g4c_ptr_add(pkt->anno(), _anno_offset)) =
-		    g4c_cpu_classify_pkt(gcl, (uint8_t*)g4c_ptr_add(pkt->data(), _slice_offset));
-	    }
-	}
-    }
-getout:
-    if (!_div)
-	output(i).bpush(p);
-    else {
-	atomic_uint32_t::inc(p->shared);
-	output(i*2).bpush(p);
-	output(i*2+1).bpush(p);
-    }	
-}
-
-void
-SnapClassifier::push(int i, Packet *p)
-{
-    if (_on_cpu < 2) {
-	hvp_chatter("Should never call this: %d, %p\n", i, p);
-    }
-    else {
-	if (_on_cpu != 3) {
-	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-		g4c_cpu_classify_pkt(gcl, (uint8_t*)g4c_ptr_add(p->data(), _slice_offset));
-	}
-	output(i).push(p);
-    }
-}
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(BElement)
 EXPORT_ELEMENT(SnapClassifier)
 ELEMENT_LIBS(-lg4c)    
