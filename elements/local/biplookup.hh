@@ -13,7 +13,7 @@ using namespace std;
 
 CLICK_DECLS
 
-class BIPLookup : public IPRouteTable, public BElement {
+class BIPLookup : public IPRouteTable{
 public:
     BIPLookup();
     ~BIPLookup();

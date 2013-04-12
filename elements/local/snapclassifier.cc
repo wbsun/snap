@@ -48,7 +48,11 @@ static void
 dump_patterns(g4c_pattern_t *ptns, int n)
 {
     for (int i=0; i<n; i++) {
-	click_chatter("0X%08X, %d, 0X%08X, %d, %d, %d, 0X%04X ");
+	click_chatter("0X%X, %u, 0X%X, %u, %u, %u, 0X%X ",
+		      ptns[i].src_addr, ptns[i].nr_src_netbits,
+		      ptns[i].dst_addr, ptns[i].nr_dst_netbits,
+		      ptns[i].src_port, ptns[i].dst_port,
+		      ptns[i].proto);
     }
 }
 
@@ -96,8 +100,8 @@ SnapClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 	generate_random_patterns(ptns, nr_patterns);
     }
 
-    if (_debug)
-	dump_patterns(ptns, nr_patterns);
+    /*if (_debug)
+      dump_patterns(ptns, nr_patterns);*/
 
     free(ptns);
 
@@ -134,21 +138,42 @@ SnapClassifier::parse_patterns(Vector<String> &conf, ErrorHandler *errh,
 	    if (!tokenize_filter(conf[i], cursor, errh))
 		return false;
 	    tokens[j] = String(begin, cursor);
-	    begin = cursor+1;
+	    cursor++;
+	    begin = cursor;
 	}
 
 	while(cursor != conf[i].end() && *cursor != '/')
 	    cursor++;
-	tokens[j] = String(begin, cursor);
+	tokens[8] = String(begin, cursor);
 	begin = cursor+1;
 
 	while(cursor != conf[i].end())
 	    cursor++;
-	tokens[j+1] = String(begin, cursor);
+	tokens[9] = String(begin, cursor);
+
+	/*if (_debug) {
+	    click_chatter(" %s | %s | %s | %s | %s | %s | %s | %s",
+			  tokens[0].c_str(), tokens[1].c_str(),
+			  tokens[2].c_str(), tokens[4].c_str(),
+			  tokens[5].c_str(), tokens[7].c_str(),
+			  tokens[8].c_str(), tokens[9].c_str());
+			  }*/
 
 	IPAddress src[2], dst[2];
-	IPPrefixArg().parse(tokens[0], src[0], src[1]);
-	IPPrefixArg().parse(tokens[1], dst[0], dst[1]);
+	/*if (_debug) {
+	    bool rt = IPPrefixArg(true).parse(tokens[0], src[0], src[1]);
+	    bool rth = IPPrefixArg().parse(String("10.1.1.2/255.255.0.0"), dst[0], dst[1]);
+	    click_chatter("parse %s get %s %s %s\n",
+			  tokens[0].c_str(), rt?"true":"false",
+			  src[0].unparse().c_str(),
+			  src[1].unparse().c_str());
+	    click_chatter("parse 10.1.1.2/255.255.0.0 get %s %s %s\n",
+			  rth?"true":"false",
+			  dst[0].unparse().c_str(),
+			  dst[1].unparse().c_str());
+			  }*/
+	IPPrefixArg(true).parse(tokens[0], src[0], src[1]);
+	IPPrefixArg(true).parse(tokens[1], dst[0], dst[1]);
 
 	ptns[i].src_addr = src[0].addr();
 	ptns[i].nr_src_netbits = src[1].mask_to_prefix_len();

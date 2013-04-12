@@ -1,5 +1,5 @@
-#ifndef CLICK_BIDS_HH
-#define CLICK_BIDS_HH
+#ifndef CLICK_BIDE_HH
+#define CLICK_BIDE_HH
 #include <click/glue.hh>
 #include <click/element.hh>
 #include <click/pbatch.hh>

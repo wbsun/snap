@@ -1,5 +1,5 @@
-#ifndef CLICK_BCL_HH
-#define CLICK_BCL_HH
+#ifndef CLICK_GCL_HH
+#define CLICK_GCL_HH
 #include <click/glue.hh>
 #include <click/element.hh>
 #include <click/pbatch.hh>
@@ -24,6 +24,8 @@ public:
     int initialize(ErrorHandler *errh);
 
     int classify_batch(PBatch *pb);
+    void bpush(int i, PBatch* pb);
+    void push(int i, Packet* p);
 
 private:
     int parse_rules(Vector<String> &conf, g4c_pattern_t *ptns, int n, ErrorHandler *errh);
@@ -33,6 +35,9 @@ private:
     int _test;
     int _on_cpu;
     bool _div;
+    PSliceRange _psr;
+    int16_t _anno_offset;
+    int16_t _slice_offset;
 };
 
 CLICK_ENDDECLS
