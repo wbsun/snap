@@ -9,22 +9,22 @@
 #include <click/atomic.hh>
 #include <fstream>
 using namespace std;
-#include "snapclassifier.hh"
+#include "snapclassifierruleset.hh"
 
 CLICK_DECLS
 
-SnapClassifier::SnapClassifier()
+SnapClassifierRuleset::SnapClassifierRuleset()
 {
     _debug = false;
     gcl = 0;
 }
 
-SnapClassifier::~SnapClassifier()
+SnapClassifierRuleset::~SnapClassifierRuleset()
 {
 }
 
 static bool
-read_pattern_file(String &filename, Vector<String> &sptns, ErrorHandler *errh)
+read_rule_file(String &filename, Vector<String> &sptns, ErrorHandler *errh)
 {
     ifstream ifs (filename.c_str());
     if (ifs.fail()) {
@@ -45,7 +45,7 @@ read_pattern_file(String &filename, Vector<String> &sptns, ErrorHandler *errh)
 }
 
 static void
-dump_patterns(g4c_pattern_t *ptns, int n)
+dump_rules(g4c_pattern_t *ptns, int n)
 {
     for (int i=0; i<n; i++) {
 	click_chatter("0X%X, %u, 0X%X, %u, %u, %u, 0X%X ",
@@ -57,15 +57,15 @@ dump_patterns(g4c_pattern_t *ptns, int n)
 }
 
 int
-SnapClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
+SnapClassifierRuleset::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     String filename;
     bool fromfile;
     int nr_patterns = 1000;
     
     if (cp_va_kparse(conf, this, errh,
-		     "PATTERN_FILE", cpkC, &fromfile, cpFilename, &filename,
-		     "NR_PATTERNS", cpkN, cpInteger, &nr_patterns,
+		     "RULES_FILE", cpkC, &fromfile, cpFilename, &filename,
+		     "NR_RULES", cpkN, cpInteger, &nr_patterns,
 		     "DEBUG", cpkN, cpBool, &_debug,
 		     cpEnd) < 0)
 	return -1;
@@ -76,33 +76,50 @@ SnapClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 	if (!read_pattern_file(filename, sptns, errh))
 	    return -1;
 
-	if (_debug)
-	    nr_patterns = sptns.size();
+	nr_patterns = sptns.size();
 	
 	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*sptns.size());
 	if (!ptns) {
-	    errh->error("failed to alloc mem for patterns");
+	    errh->error("failed to alloc mem for rules");
 	    return -1;
 	}
 	memset(ptns, 0, sizeof(g4c_pattern_t)*sptns.size());
-	if (!parse_patterns(sptns, errh, ptns, sptns.size())) {
-	    errh->error("failed to parse patterns");
+	if (!parse_rules(sptns, errh, ptns, sptns.size())) {
+	    errh->error("failed to parse rules");
 	    return -1;
 	}
     } else {
 	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*nr_patterns);
 	if (!ptns) {
-	    errh->error("failed to alloc mem for patterns");
+	    errh->error("failed to alloc mem for rules");
 	    return -1;
 	}
 	
 	memset(ptns, 0, sizeof(g4c_pattern_t)*nr_patterns);
-	generate_random_patterns(ptns, nr_patterns);
+	generate_random_rules(ptns, nr_patterns);
     }
 
     /*if (_debug)
       dump_patterns(ptns, nr_patterns);*/
 
+    int s = g4c_alloc_stream();
+    if (!s) {
+	errh->error("Failed to alloc stream for classifier copy");
+	free(ptns);
+	return -1;
+    }
+
+    gcl = g4c_create_classifier(ptns, nr_patterns, 1, s);
+    if (!gcl || !gcl->devmem) {
+	errh->error("Failed to create classifier");
+	g4c_free_stream(s);
+	free(ptns);
+	return -1;
+    } else {
+	errh->message("Classifier built for host and device.");
+    }
+
+    g4c_free_stream(s);
     free(ptns);
 
     return 0;
@@ -121,7 +138,7 @@ tokenize_filter(String& line, const char *&cursor, ErrorHandler *errh)
 }
 
 bool
-SnapClassifier::parse_patterns(Vector<String> &conf, ErrorHandler *errh,
+SnapClassifierRuleset::parse_rules(Vector<String> &conf, ErrorHandler *errh,
 			       g4c_pattern_t *ptns, int n)
 {
     // format:
@@ -209,7 +226,7 @@ SnapClassifier::parse_patterns(Vector<String> &conf, ErrorHandler *errh,
 }
 
 void
-SnapClassifier::generate_random_patterns(g4c_pattern_t *ptns, int n)
+SnapClassifierRuleset::generate_random_rules(g4c_pattern_t *ptns, int n)
 {
     struct timeval tv;
     gettimeofday(&tv, 0);
@@ -256,47 +273,9 @@ SnapClassifier::generate_random_patterns(g4c_pattern_t *ptns, int n)
 }
 
 int
-SnapClassifier::initialize(ErrorHandler *errh)
+SnapClassifierRuleset::initialize(ErrorHandler *errh)
 {
     /*
-    if (_on_cpu == 3)
-	return 0;
-    
-    g4c_pattern_t *ptns = 0;
-    int nptns = 0;
-    if (_test > 2) {
-	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*_test);
-	if (!ptns) {
-	    errh->error("Failed to alloc mem for patterns");
-	    return -1;
-	}
-	memset(ptns, 0, sizeof(g4c_pattern_t)*_test);
-	generate_random_patterns(ptns, _test);
-	nptns = _test;
-    } 
-    
-    int s = g4c_alloc_stream();
-    if (!s) {
-	errh->error("Failed to alloc stream for classifier copy");
-	return -1;
-    }
-
-    gcl = g4c_create_classifier(ptns, nptns, 1, s);
-    if (!gcl || !gcl->devmem) {
-	errh->error("Failed to create classifier");
-	if (_test > 2) {
-	    g4c_free_stream(s);
-	    free(ptns);
-	}
-	return -1;
-    } else {
-	errh->message("Classifier built for host and device.");
-	if (_test > 2)
-	    free(ptns);
-    }
-
-    g4c_free_stream(s);
-
     if (_on_cpu < 2) {
 	_batcher->setup_all();
 	_anno_offset = _batcher->get_anno_offset(0);
@@ -308,7 +287,7 @@ SnapClassifier::initialize(ErrorHandler *errh)
 			_batcher->w_anno_start, _batcher->w_anno_len);
 	    return -1;
 	} else
-	    errh->message("SnapClassifier anno offset %d", _anno_offset);
+	    errh->message("SnapClassifierRuleset anno offset %d", _anno_offset);
 
 	_slice_offset = _batcher->get_slice_offset(_psr);
 	if (_slice_offset < 0) {
@@ -322,7 +301,7 @@ SnapClassifier::initialize(ErrorHandler *errh)
 	    }
 	    return -1;
 	} else
-	    errh->message("SnapClassifier slice offset %d", _slice_offset);
+	    errh->message("SnapClassifierRuleset slice offset %d", _slice_offset);
     } else {
 	_anno_offset = 0;
 	_slice_offset = 22; // IP dst
@@ -334,5 +313,5 @@ SnapClassifier::initialize(ErrorHandler *errh)
 
 
 CLICK_ENDDECLS
-EXPORT_ELEMENT(SnapClassifier)
+EXPORT_ELEMENT(SnapClassifierRuleset)
 ELEMENT_LIBS(-lg4c)    
