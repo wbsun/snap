@@ -9,17 +9,17 @@
 #include <click/atomic.hh>
 #include <fstream>
 using namespace std;
-#include "snapclassifierruleset.hh"
+#include "classifierruleset.hh"
 
 CLICK_DECLS
 
-SnapClassifierRuleset::SnapClassifierRuleset()
+ClassifierRuleset::ClassifierRuleset()
 {
     _debug = false;
     gcl = 0;
 }
 
-SnapClassifierRuleset::~SnapClassifierRuleset()
+ClassifierRuleset::~ClassifierRuleset()
 {
 }
 
@@ -57,7 +57,7 @@ dump_rules(g4c_pattern_t *ptns, int n)
 }
 
 int
-SnapClassifierRuleset::configure(Vector<String> &conf, ErrorHandler *errh)
+ClassifierRuleset::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     String filename;
     bool fromfile;
@@ -138,7 +138,7 @@ tokenize_filter(String& line, const char *&cursor, ErrorHandler *errh)
 }
 
 bool
-SnapClassifierRuleset::parse_rules(Vector<String> &conf, ErrorHandler *errh,
+ClassifierRuleset::parse_rules(Vector<String> &conf, ErrorHandler *errh,
 			       g4c_pattern_t *ptns, int n)
 {
     // format:
@@ -226,7 +226,7 @@ SnapClassifierRuleset::parse_rules(Vector<String> &conf, ErrorHandler *errh,
 }
 
 void
-SnapClassifierRuleset::generate_random_rules(g4c_pattern_t *ptns, int n)
+ClassifierRuleset::generate_random_rules(g4c_pattern_t *ptns, int n)
 {
     struct timeval tv;
     gettimeofday(&tv, 0);
@@ -273,7 +273,7 @@ SnapClassifierRuleset::generate_random_rules(g4c_pattern_t *ptns, int n)
 }
 
 int
-SnapClassifierRuleset::initialize(ErrorHandler *errh)
+ClassifierRuleset::initialize(ErrorHandler *errh)
 {
     /*
     if (_on_cpu < 2) {
@@ -287,7 +287,7 @@ SnapClassifierRuleset::initialize(ErrorHandler *errh)
 			_batcher->w_anno_start, _batcher->w_anno_len);
 	    return -1;
 	} else
-	    errh->message("SnapClassifierRuleset anno offset %d", _anno_offset);
+	    errh->message("ClassifierRuleset anno offset %d", _anno_offset);
 
 	_slice_offset = _batcher->get_slice_offset(_psr);
 	if (_slice_offset < 0) {
@@ -301,7 +301,7 @@ SnapClassifierRuleset::initialize(ErrorHandler *errh)
 	    }
 	    return -1;
 	} else
-	    errh->message("SnapClassifierRuleset slice offset %d", _slice_offset);
+	    errh->message("ClassifierRuleset slice offset %d", _slice_offset);
     } else {
 	_anno_offset = 0;
 	_slice_offset = 22; // IP dst
@@ -313,5 +313,5 @@ SnapClassifierRuleset::initialize(ErrorHandler *errh)
 
 
 CLICK_ENDDECLS
-EXPORT_ELEMENT(SnapClassifierRuleset)
+EXPORT_ELEMENT(ClassifierRuleset)
 ELEMENT_LIBS(-lg4c)    

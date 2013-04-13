@@ -9,12 +9,12 @@ using namespace std;
 
 CLICK_DECLS
 
-class SnapClassifierRuleset : public Element {
+class ClassifierRuleset : public Element {
 public:
-    SnapClassifierRuleset();
-    ~SnapClassifierRuleset();
+    ClassifierRuleset();
+    ~ClassifierRuleset();
     
-    const char *class_name() const	{ return "SnapClassifierRuleset"; }
+    const char *class_name() const	{ return "ClassifierRuleset"; }
     // earlier than classifiers, but later than GPURuntime
     int configure_phase() const	{ return CONFIGURE_PHASE_PRIVILEGED; }
 
