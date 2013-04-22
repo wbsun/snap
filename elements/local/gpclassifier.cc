@@ -17,6 +17,7 @@ GPClassifier::GPClassifier() : _test(0),
     _anno_offset = -1;
     _slice_offset = -1;
     _on_cpu = 0;
+    _classifier = 0;
 }
 
 GPClassifier::~GPClassifier()
@@ -29,6 +30,7 @@ GPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
     _div = false;
     if (cp_va_kparse(conf, this, errh,
 		     "BATCHER", cpkN, cpElementCast, "Batcher", &_batcher,
+		     "CLASSIFIER", cpkM, cpElementCast, "ClassifierRuleset", &_classifier,
 		     "TEST", cpkN, cpInteger, &_test,
 		     "DIV", cpkN, cpBool, &_div,		     
 		     "CPU", cpkN, cpInteger, &_on_cpu, // 0: GPU, 1: CPU+batch, 2: CPU no batch
@@ -41,7 +43,7 @@ GPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
     }
     
     if (_on_cpu < 2)
-	if (_batcher->req_anno(0, 4, BatchProducer::anno_write)) {
+	if (_batcher->req_anno(0, 1, BatchProducer::anno_write)) {
 	    errh->error("Register annotation request in batcher failed");
 	    return -1;
 	}
@@ -57,61 +59,8 @@ GPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 			_psr.start, _psr.start_offset, _psr.len, _psr.end);
 	    return -1;
 	}
-
-    if (_test < 2) {
-	errh->error("For now, we need random generated patterns, use a TEST"
-		    " larger than 2 to assign #ptns");
-	return -1;
-    }
-
+    
     return 0;
-}
-
-void
-GPClassifier::generate_random_patterns(g4c_pattern_t *ptns, int n)
-{
-    struct timeval tv;
-    gettimeofday(&tv, 0);
-
-    srandom((unsigned)(tv.tv_usec));
-
-    for (int i=0; i<n; i++) {
-	int nbits = random()%5;
-	if (random()%3) {
-	    ptns[i].nr_src_netbits = nbits*8;
-	    for (int j=0; j<nbits; j++)
-		ptns[i].src_addr = (ptns[i].src_addr<<8)|(random()&0xff);
-	} else
-	    ptns[i].nr_src_netbits = 0;
-	
-	if (random()%3) {
-	    nbits = random()%5;
-	    ptns[i].nr_dst_netbits = nbits*8;
-	    for (int j=0; j<nbits; j++)
-		ptns[i].dst_addr = (ptns[i].dst_addr<<8)|(random()&0xff);
-	} else
-	    ptns[i].nr_dst_netbits = 0;
-	
-	if (random()%3) {
-	    ptns[i].src_port = random()%(PORT_STATE_SIZE<<1);
-	    if (ptns[i].src_port >= PORT_STATE_SIZE)
-		ptns[i].src_port -= PORT_STATE_SIZE*2;
-	} else
-	    ptns[i].src_port = -1;
-	
-	if (random()%3) {
-	    ptns[i].dst_port = random()%(PORT_STATE_SIZE<<1);
-	    if (ptns[i].dst_port >= PORT_STATE_SIZE)
-		ptns[i].dst_port -= PORT_STATE_SIZE*2;
-	} else
-	    ptns[i].dst_port = -1;
-	
-	if (random()%3) {
-	    ptns[i].proto = random()%(PROTO_STATE_SIZE);
-	} else
-	    ptns[i].proto = -1;
-	ptns[i].idx = i;
-    }
 }
 
 int
@@ -119,41 +68,6 @@ GPClassifier::initialize(ErrorHandler *errh)
 {
     if (_on_cpu == 3)
 	return 0;
-    
-    g4c_pattern_t *ptns = 0;
-    int nptns = 0;
-    if (_test > 2) {
-	ptns = (g4c_pattern_t*)malloc(sizeof(g4c_pattern_t)*_test);
-	if (!ptns) {
-	    errh->error("Failed to alloc mem for patterns");
-	    return -1;
-	}
-	memset(ptns, 0, sizeof(g4c_pattern_t)*_test);
-	generate_random_patterns(ptns, _test);
-	nptns = _test;
-    }
-    
-    int s = g4c_alloc_stream();
-    if (!s) {
-	errh->error("Failed to alloc stream for classifier copy");
-	return -1;
-    }
-
-    gcl = g4c_create_classifier(ptns, nptns, 1, s);
-    if (!gcl || !gcl->devmem) {
-	errh->error("Failed to create classifier");
-	if (_test > 2) {
-	    g4c_free_stream(s);
-	    free(ptns);
-	}
-	return -1;
-    } else {
-	errh->message("Classifier built for host and device.");
-	if (_test > 2)
-	    free(ptns);
-    }
-
-    g4c_free_stream(s);
 
     if (_on_cpu < 2) {
 	_batcher->setup_all();
@@ -192,45 +106,17 @@ GPClassifier::initialize(ErrorHandler *errh)
 void
 GPClassifier::bpush(int i, PBatch *p)
 {
-    if (!_on_cpu) {
-	if (!p->dev_stream)
-	    p->dev_stream = g4c_alloc_stream();
-	
-	g4c_gpu_classify_pkts(
-	    (g4c_classifier_t*)gcl->devmem,
-	    p->npkts,
-	    p->dslices(),
-	    p->producer->get_slice_stride(),
-	    _slice_offset,
-	    _slice_offset+12,
-	    (int*)p->dannos(),
-	    p->producer->get_anno_stride()/sizeof(int),
-	    _anno_offset/sizeof(int),
-	    p->dev_stream);
-		
+    if (!_on_cpu && !p->dev_stream)
+	p->dev_stream = g4c_alloc_stream();
+    
+    if (likely(_classifier->classify_packets(
+		   p, _anno_offset, _slice_offset, _on_cpu) == 0)) {
 	p->hwork_ptr = p->hannos();
 	p->dwork_ptr = p->dannos();
 	p->work_size = p->npkts * p->producer->get_anno_stride()/sizeof(int);
     } else {
-	if (_on_cpu == 3)
-	    goto getout;
-	
-	if (_on_cpu < 2)
-	    for(int j=0; j<p->npkts; j++) {
-		*(int*)(g4c_ptr_add(p->anno_hptr(j), _anno_offset)) =
-		    g4c_cpu_classify_pkt(
-			gcl,
-			(uint8_t*)g4c_ptr_add(p->slice_hptr(j),
-					      _slice_offset));
-	    }
-	else {
-	    for (int j=0; j<p->npkts; j++) {
-		Packet *pkt = p->pptrs[j];
-		*(int*)(g4c_ptr_add(pkt->anno(), _anno_offset)) =
-		    g4c_cpu_classify_pkt(gcl, (uint8_t*)g4c_ptr_add(pkt->data(), _slice_offset));
-	    }
-	}
-    }
+	hvp_chatter("call classifier failed\n");
+    }	
 getout:
     if (!_div)
 	output(i).bpush(p);
@@ -244,19 +130,16 @@ getout:
 void
 GPClassifier::push(int i, Packet *p)
 {
-    if (_on_cpu < 2) {
+    if (_on_cpu < ClassifierRuleset::CLASSIFY_CPU_NON_BATCH) {
 	hvp_chatter("Should never call this: %d, %p\n", i, p);
     }
     else {
-	if (_on_cpu != 3) {
-	    *(int*)(g4c_ptr_add(p->anno(), _anno_offset)) =
-		g4c_cpu_classify_pkt(gcl, (uint8_t*)g4c_ptr_add(p->data(), _slice_offset));
-	}
+	_classifier->classify_packet(p, anno_ofs, slice_ofs, _on_cpu);	
 	output(i).push(p);
     }
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(BElement)
+ELEMENT_REQUIRES(BElement ClassifierRuleset)
 EXPORT_ELEMENT(GPClassifier)
 ELEMENT_LIBS(-lg4c)    
