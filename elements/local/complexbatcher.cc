@@ -1,9 +1,9 @@
 #include <click/config.h>
 #include <click/error.hh>
-#include "batcher.hh"
+#include "complexbatcher.hh"
 #include <click/glue.hh>
 #include <click/standard/alignmentinfo.hh>
-#include <click/hvputils.hh>
+#include <click/snaputils.hh>
 #include <click/confparse.hh>
 #include <click/pbatch.hh>
 #include <click/timestamp.hh>
@@ -16,7 +16,7 @@ CLICK_DECLS
 // Doesn't waste much memory, 8 bytes each item.
 #define CLICK_PBATCH_POOL_SIZE 1024
 
-Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
+ComplexBatcher::ComplexBatcher(): EthernetBatchProducer(), _timer(this)
 {
     _count = 0;
     _drops = 0;
@@ -47,13 +47,13 @@ Batcher::Batcher(): EthernetBatchProducer(), _timer(this)
     _local_alloc = false;
 }
 
-Batcher::~Batcher()
+ComplexBatcher::~ComplexBatcher()
 {
 }
 
 
 int
-Batcher::init_pb_pool()
+ComplexBatcher::init_pb_pool()
 {
     if (_forced_nr_pools > 0)
 	_nr_pools = _forced_nr_pools;
@@ -68,7 +68,7 @@ Batcher::init_pb_pool()
 	_need_free_locking = _forced_free_locking;
     }
     
-    hvp_chatter("Batcher pool, %s %d pools, "
+    hvp_chatter("ComplexBatcher pool, %s %d pools, "
 		"%s alloc locking, "
 		"%s free locking, %lu sz.\n",
 		(_forced_nr_pools?"forced":"per-thread"),
@@ -85,7 +85,7 @@ Batcher::init_pb_pool()
 	for (int i=0; i<_nr_pools; i++)
 	{
 	    if (!_pb_pools[i].reserve(_batch_pool_size)) {
-		hvp_chatter("Batcher batch pool %d failed "
+		hvp_chatter("ComplexBatcher batch pool %d failed "
 			    "to reserve space.", i);
 		return -1;
 	    }
@@ -117,7 +117,7 @@ Batcher::init_pb_pool()
     }
     else
     {
-	hvp_chatter("Out of memory for Batcher batch pools.\n");
+	hvp_chatter("Out of memory for ComplexBatcher batch pools.\n");
 	return -1;
     }
 
@@ -125,14 +125,14 @@ Batcher::init_pb_pool()
 }
 
 PBatch*
-Batcher::create_new_batch()
+ComplexBatcher::create_new_batch()
 {
     PBatch *pb = new PBatch(this);
     return pb;
 }
 
 int
-Batcher::init_batch_after_create(PBatch *pb)
+ComplexBatcher::init_batch_after_create(PBatch *pb)
 {
     pb->init();
     if (this->alloc_batch_priv_data(pb)) {
@@ -169,7 +169,7 @@ Batcher::init_batch_after_create(PBatch *pb)
 
 
 int
-Batcher::finit_batch_for_recycle(PBatch *pb)
+ComplexBatcher::finit_batch_for_recycle(PBatch *pb)
 {
     pb->shared = 1;
 
@@ -195,7 +195,7 @@ Batcher::finit_batch_for_recycle(PBatch *pb)
 }
 
 bool
-Batcher::recycle_batch(PBatch *pb)
+ComplexBatcher::recycle_batch(PBatch *pb)
 {
     LFRing<PBatch*> *pool;
     bool rt = false;
@@ -270,7 +270,7 @@ Batcher::recycle_batch(PBatch *pb)
 }
 
 int
-Batcher::destroy_batch(PBatch *pb)
+ComplexBatcher::destroy_batch(PBatch *pb)
 {
     pb->finit();
 
@@ -284,7 +284,7 @@ Batcher::destroy_batch(PBatch *pb)
 }
 
 PBatch*
-Batcher::alloc_batch()
+ComplexBatcher::alloc_batch()
 {	
     PBatch *pb = 0;
     int i, tid = click_current_thread_id;
@@ -336,7 +336,7 @@ Batcher::alloc_batch()
 }
 
 int
-Batcher::kill_batch(PBatch *pb)
+ComplexBatcher::kill_batch(PBatch *pb)
 {
     if (atomic_uint32_t::dec_and_test(pb->shared))
     {
@@ -377,7 +377,7 @@ Batcher::kill_batch(PBatch *pb)
  * Pre-condition: _batch exists, _batch not full. Packet p checked.
  */
 void
-Batcher::add_packet(Packet *p)
+ComplexBatcher::add_packet(Packet *p)
 {
     int idx = _batch->npkts;
 
@@ -426,7 +426,7 @@ Batcher::add_packet(Packet *p)
 }
 
 void
-Batcher::push(int i, Packet *p)
+ComplexBatcher::push(int i, Packet *p)
 {
     if (test_mode == test_mode2) {
 	if (_test > 1)
@@ -467,7 +467,7 @@ Batcher::push(int i, Packet *p)
 }
 
 int
-Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
+ComplexBatcher::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_kparse(conf, this, errh,
 		     "TIMEOUT", cpkN, cpInteger, &_timeout_ms,
@@ -489,7 +489,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 	return -1;
 
     if (__builtin_popcount(_batch_pool_size>>1) != 1) {
-	errh->fatal("Batcher need a power of 2 pool size,"
+	errh->fatal("ComplexBatcher need a power of 2 pool size,"
 		    " but given %d\n", _batch_pool_size);
 	return -1;
     }
@@ -531,7 +531,7 @@ Batcher::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-Batcher::initialize(ErrorHandler *errh)
+ComplexBatcher::initialize(ErrorHandler *errh)
 {
     _timer.initialize(this);
 
@@ -544,7 +544,7 @@ Batcher::initialize(ErrorHandler *errh)
 }
 
 void
-Batcher::run_timer(Timer *timer)
+ComplexBatcher::run_timer(Timer *timer)
 {
     PBatch *pb = _timed_batch;
     if (pb != _batch || !pb)
@@ -559,6 +559,6 @@ Batcher::run_timer(Timer *timer)
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(BElement GPURuntime)
-EXPORT_ELEMENT(Batcher)
+EXPORT_ELEMENT(ComplexBatcher)
 ELEMENT_LIBS(-lg4c)
 

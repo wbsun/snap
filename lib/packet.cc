@@ -284,7 +284,7 @@ WritablePacket::pool_initialize()
 	int j=0;
 	if (!(p = new WritablePacket[CLICK_PACKET_POOL_SIZE])) {
 	    ErrorHandler::default_handler()->warning("Memalloc failed for packet pool initialization.");
-	    return -1;
+ 	    return -1;
 	}	
 	do {
 	    p[j].initialize();
