@@ -9,5 +9,14 @@
   Snap is still under development, master branch doesn't contain the latest
     unstable change, checkout other topic branches such as "mrg" for new
     functionality and elements.
+    
+  Some notes:
+    - All batched elements are in elements/local/
+    - I/O related and Netmap Snap elements are in elements/userlevel/
+    - PacketBatch is in lib/
+    - No stable rule parser available. I used to modify classifier or lookup
+      elements directly to get binary format rules/routing table.
+    - userlevel/click.cc has been modified for RSS pin.
+    - lib/packet.cc modified for per-thread pool.
   
   wbsun@cs.utah.edu
